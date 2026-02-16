@@ -1,0 +1,22 @@
+project:
+  type: default
+  output-dir: ../_book/presentation
+
+format:
+  revealjs:
+    theme: [default, custom.scss]
+    fontsize: 200%
+    incremental: false
+    slide-number: true
+    preview-links: auto
+    transition: slide
+    background-transition: fade
+    code-line-numbers: false
+    self-contained: false
+    flashcards:
+      showFlipButton: false
+
+revealjs-plugins:
+  - flashcards
+
+bibliography: ../references.bib

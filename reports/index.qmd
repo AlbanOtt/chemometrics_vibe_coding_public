@@ -4,6 +4,19 @@ title: "Welcome"
 
 # Metabolomics Analysis Tutorial: LC-MS Diphenhydramine Pharmacokinetics
 
+::: {.callout-note icon=false}
+## 🎤 Workshop Presentation
+
+**New to vibe coding?** Start with the [Workshop Introduction](presentation/workshop_presentation.html) - an interactive presentation covering:
+
+- What is vibe coding and how it differs from traditional coding
+- Live demonstration of building analyses with Claude Code
+- Best practices for AI-assisted scientific workflows
+- Setting up your environment with `CLAUDE.md` and skills
+
+Then return here for the hands-on tutorials.
+:::
+
 ## Overview
 
 This tutorial series demonstrates a complete metabolomics analysis workflow using liquid chromatography-mass spectrometry (LC-MS) data from a pharmacokinetics study. The study investigates whether skin metabolites can serve as biomarkers for drug monitoring by comparing diphenhydramine levels and metabolic changes across plasma, forearm, and forehead skin samples.
