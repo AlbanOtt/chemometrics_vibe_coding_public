@@ -25,8 +25,8 @@ Thank you for your interest in contributing! This repository serves both as a te
 
 ```bash
 # Fork the repository on GitHub, then clone your fork
-git clone https://github.com/YOUR_USERNAME/chemometrics_vibe_coding.git
-cd chemometrics_vibe_coding
+git clone https://github.com/YOUR_USERNAME/chemometrics_vibe_coding_public.git
+cd chemometrics_vibe_coding_public
 
 # Install dependencies
 uv sync
@@ -311,7 +311,7 @@ This project follows the [Code of Conduct](CODE_OF_CONDUCT.md). By participating
 ## Questions?
 
 - **Documentation:** Start with [README.md](README.md) and [CLAUDE.md](CLAUDE.md)
-- **Issues:** Check [existing issues](https://github.com/AlbanOtt/chemometrics_vibe_coding/issues)
+- **Issues:** Check [existing issues](https://github.com/AlbanOtt/chemometrics_vibe_coding_public/issues)
 - **Contact:** See maintainer contact information in [README.md](README.md)
 
 ## License

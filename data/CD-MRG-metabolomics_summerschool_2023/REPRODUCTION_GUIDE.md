@@ -101,14 +101,14 @@ The dataset is from the CD-MRG Metabolomics Summer School 2023. If you don't hav
 ### 1. Clone or Create Project Directory
 
 ```bash
-git clone <repository-url> chemometrics_vibe_coding
-cd chemometrics_vibe_coding
+git clone <repository-url> chemometrics_vibe_coding_public
+cd chemometrics_vibe_coding_public
 ```
 
 Or create from scratch:
 ```bash
-mkdir chemometrics_vibe_coding
-cd chemometrics_vibe_coding
+mkdir chemometrics_vibe_coding_public
+cd chemometrics_vibe_coding_public
 ```
 
 ### 2. Install Dependencies
@@ -145,7 +145,7 @@ uv run python -c "import numpy, pandas, sklearn; print('✓ All dependencies ins
 ## Project Structure
 
 ```
-chemometrics_vibe_coding/
+chemometrics_vibe_coding_public/
 ├── data/
 │   └── CD-MRG-metabolomics_summerschool_2023/
 │       ├── forearm_iimn_gnps_quant.csv      # Raw GNPS data

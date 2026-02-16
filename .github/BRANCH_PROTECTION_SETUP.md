@@ -14,7 +14,7 @@ Branch protection prevents:
 
 ### 1. Navigate to Branch Protection Settings
 
-1. Go to your repository on GitHub: `https://github.com/AlbanOtt/chemometrics_vibe_coding`
+1. Go to your repository on GitHub: `https://github.com/AlbanOtt/chemometrics_vibe_coding_public`
 2. Click **Settings** (top navigation)
 3. In the left sidebar, click **Branches**
 4. Under "Branch protection rules", click **Add rule** (or **Add branch protection rule**)
