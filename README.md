@@ -79,7 +79,7 @@ chemometrics_vibe_coding/
 ### View the outputs (no installation needed)
 
 **📚 Read the analysis online**: The complete metabolomics tutorial is available at:
-**https://albanott.github.io/chemometrics_vibe_coding/**
+**https://albanott.github.io/chemometrics_vibe_coding_public/**
 
 No installation, no setup, just click and read. All interactive plots and tables work directly in your browser.
 
@@ -91,8 +91,8 @@ Requires Python 3.9+, [uv](https://docs.astral.sh/uv/), and [Quarto](https://qua
 
 ```bash
 # Clone the repository (~100MB, optimized for classroom use)
-git clone https://github.com/AlbanOtt/chemometrics_vibe_coding.git
-cd chemometrics_vibe_coding
+git clone https://github.com/AlbanOtt/chemometrics_vibe_coding_public.git
+cd chemometrics_vibe_coding_public
 
 # Install dependencies
 uv sync
@@ -136,7 +136,7 @@ This repository accompanies a pre-congress training session at [Chimiométrie 20
          analysis and modeling using {AI}-assisted programming},
   author={Ott, Alban},
   year={2026},
-  howpublished={\url{https://github.com/AlbanOtt/chemometrics_vibe_coding}},
+  howpublished={\url{https://github.com/AlbanOtt/chemometrics_vibe_coding_public}},
   note={Pre-congress training, Chimiom\'{e}trie 2026}
 }
 ```

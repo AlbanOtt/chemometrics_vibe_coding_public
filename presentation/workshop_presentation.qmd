@@ -48,7 +48,7 @@ from: markdown+emoji
    - It would allow you to reproduce some of what I will show you, but not all for usage limitations (detailed later).
 - I also have GitHub Copilot activated because it is the one I actually use daily in my job.
 - I use VS Code; AI integration is very good.
-- Clone this repository from GitHub: [https://github.com/AlbanOtt/chemometrics_vibe_coding](https://github.com/AlbanOtt/chemometrics_vibe_coding)
+- Clone this repository from GitHub: [https://github.com/AlbanOtt/chemometrics_vibe_coding_public](https://github.com/AlbanOtt/chemometrics_vibe_coding_public)
 
 # 1. Introduction {background-color="#2c5282"}
 
@@ -255,7 +255,7 @@ See "Human notes":
 
 ## Compound Detection
 
-- You should not only review the Quarto file but also the [.py file](https://github.com/AlbanOtt/chemometrics_vibe_coding/blob/7ddbef49031318cdd1f0cdbd92935640bbd40bf3/src/drug_detection.py#L22-L24).
+- You should not only review the Quarto file but also the [.py file](https://github.com/AlbanOtt/chemometrics_vibe_coding_public/blob/main/src/drug_detection.py#L22-L24).
    - Claude independently found the m/z values of [Diphenhydramine](https://pubchem.ncbi.nlm.nih.gov/compound/Diphenhydramine#section=Spectral-Information), [N-desmethyl-DPH](https://pubchem.ncbi.nlm.nih.gov/compound/N-Desmethyldiphenhydramine#section=Chemical-Classes), and [DPH N-oxide](https://pubchem.ncbi.nlm.nih.gov/compound/65618#section=Spectral-Information).
    - It took me only a few minutes to verify the values with Perplexity.
 
@@ -525,7 +525,7 @@ I save the plan to be able to resume later.
 
 Let's analyze this plan together.
 
-[Phase 6 plan](https://github.com/AlbanOtt/chemometrics_vibe_coding/blob/a25bf12d39c18d10b0c62668cca1457ef13f128e/data/CD-MRG-metabolomics_summerschool_2023/plan_phase6.md)
+[Phase 6 plan](https://github.com/AlbanOtt/chemometrics_vibe_coding_public/blob/main/data/CD-MRG-metabolomics_summerschool_2023/plan_phase6.md)
 
 ## Implement the Plan
 
@@ -639,7 +639,7 @@ Think of it as **project instructions for your AI collaborator**.
 ## Error Resolution
 [Fix order, debugging strategy]
 ```
-The [CLAUDE.md](https://github.com/AlbanOtt/chemometrics_vibe_coding/blob/1cfc052b8a3ce524c454feac0f21d009d6080c4c/CLAUDE.md) I wrote for this workshop.
+The [CLAUDE.md](https://github.com/AlbanOtt/chemometrics_vibe_coding_public/blob/main/CLAUDE.md) I wrote for this workshop.
 
 Rule of thumb: Are these information ALWAYS needed regardless the context? if not, consider skills or agents.
 The more you write in CLAUDE.md, the more credits are used.
@@ -669,7 +669,7 @@ Analyze LC-MS metabolomics data to detect diphenhydramine and its metabolites in
 
 ---
 
-These instructions, I provided them in the initial [prompt](https://github.com/AlbanOtt/chemometrics_vibe_coding/blob/feat/final_repos_state/data/CD-MRG-metabolomics_summerschool_2023/prompt.md) because I wanted to have a user experience like:
+These instructions, I provided them in the initial [prompt](https://github.com/AlbanOtt/chemometrics_vibe_coding_public/blob/main/data/CD-MRG-metabolomics_summerschool_2023/prompt.md) because I wanted to have a user experience like:
 - drop your files in "./data"
 - write a prompt specific to your use-case and run it
 - How can we actually reach this?
@@ -960,7 +960,7 @@ scientific paper.
 ```
 
 Result here:
-[Skill](https://github.com/AlbanOtt/chemometrics_vibe_coding/blob/1cfc052b8a3ce524c454feac0f21d009d6080c4c/.claude/skills/chemometrics-ms-metabolomics/SKILL.md) based on Boccard & Rudaz, 2018
+[Skill](https://github.com/AlbanOtt/chemometrics_vibe_coding_public/blob/main/.claude/skills/chemometrics-ms-metabolomics/SKILL.md) based on Boccard & Rudaz, 2018
 
 ---
 
@@ -981,10 +981,10 @@ Claude didn't stick to the paper, it incorporated its own knowledge for the best
 
 #### The worst
 
-- We don't care about [references](https://github.com/AlbanOtt/chemometrics_vibe_coding/blob/2c833e601147947a098fa981dd3409e274f16a2f/.claude/skills/chemometrics-ms-metabolomics/SKILL.md#references) in the skill, it's a waste of token. Initial prompt should be improved. 
-- Very low degree of freedom for the [multivariate analysis](https://github.com/AlbanOtt/chemometrics_vibe_coding/blob/2c833e601147947a098fa981dd3409e274f16a2f/.claude/skills/chemometrics-ms-metabolomics/references/multivariate-analysis.md). In the whole skill in general. I should improve my prompt.
+- We don't care about [references](https://github.com/AlbanOtt/chemometrics_vibe_coding_public/blob/main/.claude/skills/chemometrics-ms-metabolomics/SKILL.md#references) in the skill, it's a waste of token. Initial prompt should be improved.
+- Very low degree of freedom for the [multivariate analysis](https://github.com/AlbanOtt/chemometrics_vibe_coding_public/blob/main/.claude/skills/chemometrics-ms-metabolomics/references/multivariate-analysis.md). In the whole skill in general. I should improve my prompt.
 
-- Boccard & Rudaz are very vague about missing values, still the skill has a [list of method](https://github.com/AlbanOtt/chemometrics_vibe_coding/blob/2c833e601147947a098fa981dd3409e274f16a2f/.claude/skills/chemometrics-ms-metabolomics/references/normalization.md#missing-value-handling), not what I would recommend. 
+- Boccard & Rudaz are very vague about missing values, still the skill has a [list of method](https://github.com/AlbanOtt/chemometrics_vibe_coding_public/blob/main/.claude/skills/chemometrics-ms-metabolomics/references/normalization.md#missing-value-handling), not what I would recommend. 
 
 
 I would recommend to read carefully then perform a sanity check with a prompt like
@@ -1197,5 +1197,5 @@ Treat skill installation like installing software: review it, understand it, tru
 
 **Workshop materials:**
 
-[https://github.com/AlbanOtt/chemometrics_vibe_coding](https://github.com/AlbanOtt/chemometrics_vibe_coding)
+[https://github.com/AlbanOtt/chemometrics_vibe_coding_public](https://github.com/AlbanOtt/chemometrics_vibe_coding_public)
 
