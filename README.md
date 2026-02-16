@@ -29,7 +29,7 @@ Everything here was built with Claude Code CLI guided by domain-specific skills 
 ## Repository Structure
 
 ```
-chemometrics_vibe_coding/
+chemometrics_vibe_coding_public/
 ├── src/                                # Analysis modules
 │   ├── preprocessing.py                # Data loading, blank filtering, PQN normalization
 │   ├── eda.py                          # Intensity distributions, PCA QC, outlier detection
