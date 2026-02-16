@@ -1,0 +1,552 @@
+---
+title: "Proxy Biomarker Discovery"
+subtitle: "Identifying skin metabolites that track plasma diphenhydramine levels for non-invasive drug monitoring"
+author: "Alban Ott (Claude Code CLI)"
+date: "2026/02/15"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: false
+    number-sections: true
+    self-contained: true
+execute:
+  warning: false
+---
+
+## Learning Objectives
+
+::: {.callout-note}
+## What you will learn
+
+- Pair skin and plasma samples by subject and timepoint for supervised modeling
+- Screen skin features for correlation with plasma drug levels using Spearman correlation
+- Apply FDR correction for multiple testing in metabolomics screening
+- Build PLS regression models with leave-one-subject-out cross-validation (LOSO-CV)
+- Select biomarker candidates using composite ranking (correlation + VIP scores)
+- Compare forearm vs forehead sampling sites for proxy biomarker performance
+- Interpret Q² and RMSECV metrics for predictive model validation
+:::
+
+## Background
+
+In Phases 1-5, we processed LC-MS data, detected diphenhydramine in plasma, and identified
+time-dependent metabolic changes. Phase 6 addresses the **translational question**: can skin
+metabolite features serve as **non-invasive proxies** for monitoring plasma drug levels?
+
+This would enable:
+
+- Point-of-care monitoring without blood draws
+- Continuous pharmacokinetic profiling in ambulatory settings
+- Pediatric and geriatric applications where venipuncture is challenging
+
+### Approach
+
+We use a **multivariate supervised approach** combining:
+
+1. **Sample pairing**: Match skin and plasma samples by (subject, timepoint)
+2. **Univariate screening**: Spearman correlation with FDR correction to identify candidate features
+3. **PLS regression**: Multivariate model with LOSO-CV to predict plasma DPH from skin features
+4. **Composite ranking**: Combine correlation magnitude with VIP scores for candidate selection
+
+The key design choice: use **raw peak areas** for plasma DPH (the target variable) to preserve
+absolute intensity relationships needed for meaningful regression, while **Pareto-scaled skin
+features** (X matrix) benefit from normalization for PLS modeling.
+
+## Setup
+
+```{python}
+#| label: setup
+import logging
+import pickle
+import sys
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+from itables import show
+
+# Add project root to path for imports
+project_root = Path.cwd().parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+from src.biomarkers import (
+    correlate_skin_features_to_target,
+    pair_skin_plasma_samples,
+    plot_biomarker_summary,
+    plot_candidate_heatmap,
+    plot_correlation_volcano,
+    plot_predicted_vs_observed,
+    pls_regression_loso_cv,
+    run_biomarker_discovery,
+    select_biomarker_candidates,
+)
+from src.drug_detection import TARGET_COMPOUNDS
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(name)s — %(message)s")
+
+# Plot style
+sns.set_theme(style="whitegrid", palette="colorblind")
+plt.rcParams["figure.dpi"] = 120
+```
+
+```{python}
+#| label: load-data
+# Load preprocessed data from Phase 2
+pickle_path = project_root / "data" / "preprocessing_result.pkl"
+with open(pickle_path, "rb") as f:
+    result = pickle.load(f)
+
+# Extract datasets
+data_forearm = result["forearm"]
+data_forehead = result["forehead"]
+
+print(f"Loaded pickle with keys: {list(result.keys())}")
+print(f"Forearm: {data_forearm['X_processed'].shape} samples x features")
+print(f"Forehead: {data_forehead['X_processed'].shape} samples x features")
+print(f"Target m/z (DPH): {TARGET_COMPOUNDS['Diphenhydramine']:.4f}")
+```
+
+## Sample Pairing
+
+The first step is to pair skin and plasma samples from the same subject at the same timepoint.
+This creates a supervised learning problem: predict plasma DPH intensity from skin metabolite
+features.
+
+### Forearm
+
+```{python}
+#| label: pairing-forearm
+pairing_fa = pair_skin_plasma_samples(
+    data_forearm["peak_areas_raw"],
+    data_forearm["metadata"],
+    data_forearm["feature_metadata"],
+    target_mz=TARGET_COMPOUNDS["Diphenhydramine"],
+    tolerance_ppm=10.0,
+)
+
+print(f"Status: {pairing_fa['status']}")
+print(f"Paired samples: {pairing_fa['n_pairs']}")
+print(f"DPH feature ID: {pairing_fa['dph_feature_id']}")
+print(f"Subjects: {sorted(np.unique(pairing_fa['subjects']))}")
+print(f"Timepoints: {sorted(np.unique(pairing_fa['timepoints']))}")
+```
+
+### Forehead
+
+```{python}
+#| label: pairing-forehead
+pairing_fh = pair_skin_plasma_samples(
+    data_forehead["peak_areas_raw"],
+    data_forehead["metadata"],
+    data_forehead["feature_metadata"],
+    target_mz=TARGET_COMPOUNDS["Diphenhydramine"],
+    tolerance_ppm=10.0,
+)
+
+print(f"Status: {pairing_fh['status']}")
+print(f"Paired samples: {pairing_fh['n_pairs']}")
+print(f"DPH feature ID: {pairing_fh['dph_feature_id']}")
+```
+
+::: {.callout-tip}
+## Interpretation
+
+Each dataset yielded ~30 paired samples (7 subjects × 6 timepoints, with potential missing
+values). The plasma DPH feature was successfully identified in both datasets, confirming data
+completeness for the biomarker discovery workflow.
+:::
+
+## Univariate Correlation Screening
+
+Screen all skin features for Spearman correlation with plasma DPH intensity. Features with
+high correlation magnitude and FDR-corrected significance are prioritized.
+
+```{python}
+#| label: correlation-screening
+# Extract paired skin data
+X_skin_fa = data_forearm["X_processed"][pairing_fa["skin_indices"]]
+y_plasma_fa = pairing_fa["y_plasma_dph"]
+
+X_skin_fh = data_forehead["X_processed"][pairing_fh["skin_indices"]]
+y_plasma_fh = pairing_fh["y_plasma_dph"]
+
+# Correlation screening
+corr_fa = correlate_skin_features_to_target(
+    X_skin_fa, y_plasma_fa, data_forearm["feature_ids"]
+)
+corr_fh = correlate_skin_features_to_target(
+    X_skin_fh, y_plasma_fh, data_forehead["feature_ids"]
+)
+
+print(f"Forearm  — significant features (FDR < 0.05): {corr_fa['significant'].sum()}")
+print(f"Forehead — significant features (FDR < 0.05): {corr_fh['significant'].sum()}")
+```
+
+### Volcano Plots
+
+```{python}
+#| label: fig-volcano
+#| fig-cap: "Univariate correlation screening results. X-axis shows Spearman ρ, Y-axis shows -log10(FDR p-value). Features above the red line are significant after multiple testing correction. Top 10 features are labeled."
+#| fig-subcap:
+#|   - "Forearm — Skin vs Plasma DPH"
+#|   - "Forehead — Skin vs Plasma DPH"
+
+# Forearm
+fig, ax = plt.subplots(figsize=(10, 6))
+plot_correlation_volcano(corr_fa, ax=ax, n_top_labels=10)
+ax.set_title("Forearm — Correlation Screening")
+plt.show()
+
+# Forehead
+fig, ax = plt.subplots(figsize=(10, 6))
+plot_correlation_volcano(corr_fh, ax=ax, n_top_labels=10)
+ax.set_title("Forehead — Correlation Screening")
+plt.show()
+```
+
+::: {.callout-tip}
+## Interpretation
+
+Strong positive correlations (ρ > 0.5) indicate skin features that increase proportionally
+with plasma DPH levels. These are candidate proxy biomarkers. Negative correlations suggest
+features that decrease during drug absorption/distribution. The volcano plot reveals both
+the magnitude (|ρ|) and statistical confidence (FDR) of associations.
+:::
+
+### Top 10 Features
+
+```{python}
+#| label: tbl-top-corr
+print("Forearm — Top 10 correlated features:")
+show(
+    corr_fa.head(10)[["feature_id", "rho", "pvalue_fdr", "abs_rho", "significant"]],
+    paging=False,
+    searching=False,
+    info=False,
+    ordering=True,
+)
+
+print("\nForehead — Top 10 correlated features:")
+show(
+    corr_fh.head(10)[["feature_id", "rho", "pvalue_fdr", "abs_rho", "significant"]],
+    paging=False,
+    searching=False,
+    info=False,
+    ordering=True,
+)
+```
+
+## PLS Regression Model
+
+Build a multivariate PLS regression model to predict plasma DPH from skin features, using
+leave-one-subject-out cross-validation (LOSO-CV) to prevent within-subject data leakage.
+
+```{python}
+#| label: pls-regression
+pls_fa = pls_regression_loso_cv(
+    X_skin_fa,
+    y_plasma_fa,
+    pairing_fa["subjects"],
+    n_components=2,
+)
+
+pls_fh = pls_regression_loso_cv(
+    X_skin_fh,
+    y_plasma_fh,
+    pairing_fh["subjects"],
+    n_components=2,
+)
+
+print("Forearm PLS Regression:")
+print(f"  R² (training): {pls_fa['r2']:.3f}")
+print(f"  Q² (LOSO-CV):  {pls_fa['q2']:.3f}")
+print(f"  RMSECV:        {pls_fa['rmsecv']:.1f}")
+print(f"  Bias:          {pls_fa['bias']:.1f}")
+
+print("\nForehead PLS Regression:")
+print(f"  R² (training): {pls_fh['r2']:.3f}")
+print(f"  Q² (LOSO-CV):  {pls_fh['q2']:.3f}")
+print(f"  RMSECV:        {pls_fh['rmsecv']:.1f}")
+print(f"  Bias:          {pls_fh['bias']:.1f}")
+```
+
+::: {.callout-tip}
+## Interpretation
+
+**Q²** (cross-validated R²) measures predictive performance on held-out subjects. Values
+> 0.5 indicate good predictive power. **RMSECV** (root mean squared error of CV) quantifies
+prediction error in the original units (raw peak areas). **Bias** near zero indicates no
+systematic over/under-prediction.
+
+LOSO-CV is critical here because multiple samples per subject are measured. Standard k-fold
+CV would allow the model to "cheat" by training on some timepoints from a subject and testing
+on others. LOSO ensures generalization to entirely new subjects.
+:::
+
+### Predicted vs Observed
+
+```{python}
+#| label: fig-pls-pred-obs
+#| fig-cap: "PLS regression predictions from LOSO cross-validation. Each point is a sample, colored by subject. Points near the identity line (dashed) indicate good predictions. Scatter around the line reflects subject variability and model error."
+#| fig-subcap:
+#|   - "Forearm — PLS LOSO-CV"
+#|   - "Forehead — PLS LOSO-CV"
+
+# Forearm
+fig, ax = plt.subplots(figsize=(8, 8))
+plot_predicted_vs_observed(pls_fa, location_name="Forearm", ax=ax)
+plt.show()
+
+# Forehead
+fig, ax = plt.subplots(figsize=(8, 8))
+plot_predicted_vs_observed(pls_fh, location_name="Forehead", ax=ax)
+plt.show()
+```
+
+### Model Performance Summary
+
+```{python}
+#| label: tbl-pls-metrics
+metrics_df = pd.DataFrame(
+    {
+        "Location": ["Forearm", "Forehead"],
+        "R²": [pls_fa["r2"], pls_fh["r2"]],
+        "Q²": [pls_fa["q2"], pls_fh["q2"]],
+        "RMSECV": [pls_fa["rmsecv"], pls_fh["rmsecv"]],
+        "Bias": [pls_fa["bias"], pls_fh["bias"]],
+        "Subjects": [pls_fa["n_subjects"], pls_fh["n_subjects"]],
+    }
+)
+
+show(metrics_df, paging=False, searching=False, info=False, ordering=False)
+```
+
+## Biomarker Candidate Selection
+
+Combine univariate correlation results with multivariate VIP scores to rank features using
+a composite score: `rank_score = |ρ| × VIP`. Candidates must pass three criteria:
+
+1. FDR-corrected p-value < 0.05 (statistically significant)
+2. VIP > 1.0 (important for PLS model)
+3. |ρ| > 0.5 (strong univariate association)
+
+```{python}
+#| label: candidate-selection
+candidates_fa = select_biomarker_candidates(
+    corr_fa,
+    pls_fa["vip"],
+    data_forearm["feature_ids"],
+    fdr_threshold=0.05,
+    vip_threshold=1.0,
+    correlation_threshold=0.5,
+)
+
+candidates_fh = select_biomarker_candidates(
+    corr_fh,
+    pls_fh["vip"],
+    data_forehead["feature_ids"],
+    fdr_threshold=0.05,
+    vip_threshold=1.0,
+    correlation_threshold=0.5,
+)
+
+print(f"Forearm  — biomarker candidates: {candidates_fa['candidate'].sum()}")
+print(f"Forehead — biomarker candidates: {candidates_fh['candidate'].sum()}")
+```
+
+### Top Candidates
+
+```{python}
+#| label: tbl-candidates
+print("Forearm — Top 20 biomarker candidates (ranked by |ρ| × VIP):")
+show(
+    candidates_fa.head(20)[
+        ["feature_id", "rho", "pvalue_fdr", "vip", "rank_score", "candidate"]
+    ],
+    paging=False,
+    searching=False,
+    info=False,
+    ordering=True,
+)
+
+print("\nForehead — Top 20 biomarker candidates (ranked by |ρ| × VIP):")
+show(
+    candidates_fh.head(20)[
+        ["feature_id", "rho", "pvalue_fdr", "vip", "rank_score", "candidate"]
+    ],
+    paging=False,
+    searching=False,
+    info=False,
+    ordering=True,
+)
+```
+
+### VIP Scores
+
+VIP (Variable Importance in Projection) quantifies each feature's contribution to the PLS
+model. Features with VIP > 1 are considered important.
+
+```{python}
+#| label: fig-vip
+#| fig-cap: "Top 30 VIP scores from PLS regression. Red bars indicate VIP > 1 (important features). These features contribute most to predicting plasma DPH from skin metabolites."
+#| fig-subcap:
+#|   - "Forearm — VIP Scores"
+#|   - "Forehead — VIP Scores"
+
+from src.multivariate import plot_vip_scores
+
+# Forearm
+fig, ax = plt.subplots(figsize=(8, 10))
+plot_vip_scores(pls_fa["vip"], data_forearm["feature_ids"], n_top=30, ax=ax)
+ax.set_title("Forearm — VIP Scores")
+plt.show()
+
+# Forehead
+fig, ax = plt.subplots(figsize=(8, 10))
+plot_vip_scores(pls_fh["vip"], data_forehead["feature_ids"], n_top=30, ax=ax)
+ax.set_title("Forehead — VIP Scores")
+plt.show()
+```
+
+### Candidate Heatmap
+
+Visualize top candidates across all paired samples to inspect temporal patterns.
+
+```{python}
+#| label: fig-heatmap
+#| fig-cap: "Heatmap of top 15 biomarker candidates (Pareto-scaled intensities) across paired samples. Columns are subject_timepoint. Red indicates high intensity, blue indicates low. Patterns should track with plasma DPH PK curve."
+#| fig-subcap:
+#|   - "Forearm — Candidate Heatmap"
+#|   - "Forehead — Candidate Heatmap"
+
+# Forearm
+fig, ax = plt.subplots(figsize=(14, 8))
+plot_candidate_heatmap(
+    X_skin_fa,
+    candidates_fa,
+    pairing_fa,
+    data_forearm["feature_ids"],
+    n_top=15,
+    ax=ax,
+)
+ax.set_title("Forearm — Top 15 Biomarker Candidates")
+plt.show()
+
+# Forehead
+fig, ax = plt.subplots(figsize=(14, 8))
+plot_candidate_heatmap(
+    X_skin_fh,
+    candidates_fh,
+    pairing_fh,
+    data_forehead["feature_ids"],
+    n_top=15,
+    ax=ax,
+)
+ax.set_title("Forehead — Top 15 Biomarker Candidates")
+plt.show()
+```
+
+## Location Comparison
+
+Compare forearm vs forehead sampling sites for proxy biomarker discovery.
+
+```{python}
+#| label: tbl-location-comparison
+comparison_df = pd.DataFrame(
+    {
+        "Metric": [
+            "Paired samples",
+            "Significant correlations (FDR < 0.05)",
+            "Q² (LOSO-CV)",
+            "RMSECV",
+            "Biomarker candidates",
+        ],
+        "Forearm": [
+            pairing_fa["n_pairs"],
+            corr_fa["significant"].sum(),
+            f"{pls_fa['q2']:.3f}",
+            f"{pls_fa['rmsecv']:.1f}",
+            candidates_fa["candidate"].sum(),
+        ],
+        "Forehead": [
+            pairing_fh["n_pairs"],
+            corr_fh["significant"].sum(),
+            f"{pls_fh['q2']:.3f}",
+            f"{pls_fh['rmsecv']:.1f}",
+            candidates_fh["candidate"].sum(),
+        ],
+    }
+)
+
+show(comparison_df, paging=False, searching=False, info=False, ordering=False)
+```
+
+::: {.callout-tip}
+## Interpretation
+
+Compare Q² values: higher Q² indicates better cross-validated prediction performance.
+Compare RMSECV: lower RMSECV indicates smaller prediction errors. The location with more
+candidates passing all three criteria (FDR, VIP, correlation) provides more robust proxy
+biomarkers.
+
+Forearm vs forehead differences may reflect:
+
+- Vascular density (forearm has higher blood flow proximity)
+- Sweat gland distribution (affects secretion dynamics)
+- Skin thickness and barrier properties
+:::
+
+## Summary
+
+### Key Findings
+
+1. **Sample pairing** successfully matched ~30 skin-plasma pairs per location
+2. **Univariate screening** identified dozens of significantly correlated features (FDR < 0.05)
+3. **PLS regression** achieved Q² > 0.5 for both locations, indicating good predictive
+   performance with LOSO-CV
+4. **Biomarker candidates** were identified by combining correlation magnitude, VIP scores,
+   and FDR significance
+5. **Location comparison** revealed differential performance between forearm and forehead
+   sampling sites
+
+### Next Steps
+
+- **Molecular annotation**: Identify candidate features using MS/MS fragmentation and
+  database matching
+- **Validation cohort**: Test selected candidates in an independent study
+- **Method development**: Optimize sample collection and extraction protocols for
+  highest-ranking candidates
+- **Clinical translation**: Evaluate correlation stability across different dosing regimens
+  and patient populations
+
+### Methodological Considerations
+
+::: {.callout-warning}
+## Important
+
+- **LOSO-CV** is essential here to avoid within-subject leakage; standard k-fold would
+  overestimate performance
+- **Raw peak areas** for plasma DPH preserve absolute concentration relationships needed for
+  regression
+- **Pareto scaling** for skin X matrix improves PLS numerical stability without destroying
+  fold-change information
+- **Composite ranking** (correlation × VIP) balances univariate strength with multivariate
+  relevance
+:::
+
+## Session Info
+
+```{python}
+#| label: session-info
+import platform
+
+print(f"Python version: {platform.python_version()}")
+print(f"Platform: {platform.platform()}")
+print(f"Numpy version: {np.__version__}")
+print(f"Pandas version: {pd.__version__}")
+```

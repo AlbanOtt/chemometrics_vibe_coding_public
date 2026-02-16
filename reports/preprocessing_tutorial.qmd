@@ -1,0 +1,545 @@
+---
+title: "Metabolomics Data Preprocessing"
+subtitle: "Step-by-step tutorial for LC-MS diphenhydramine pharmacokinetics data"
+author: "Alban Ott (Claude Code CLI)"
+date: "2026/02/08"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: false
+    number-sections: true
+    self-contained: true
+execute:
+  warning: false
+---
+
+## Learning Objectives
+
+::: {.callout-note}
+## What you will learn
+
+- Load and inspect GNPS quantification tables from LC-MS metabolomics experiments
+- Understand the structure of untargeted metabolomics data (features x samples)
+- Apply a complete preprocessing pipeline: blank filtering, zero handling, PQN normalization, Pareto scaling
+- Evaluate the effect of each preprocessing step through diagnostic visualizations
+- Run the full automated pipeline on multiple datasets
+:::
+
+## Background
+
+This tutorial uses data from a **diphenhydramine pharmacokinetics study** where LC-MS
+metabolomics was used to monitor drug absorption through both plasma and skin sampling.
+Samples were collected from forearm and forehead skin sites at multiple timepoints after
+topical application.
+
+The raw LC-MS data was processed through **GNPS (Global Natural Products Social Molecular
+Networking)** to produce feature quantification tables. Each row is a feature (defined by
+m/z and retention time), and each column is a sample with its measured peak area.
+
+Before any statistical analysis or modeling, we need to preprocess the data to:
+
+1. Remove contaminant features that appear primarily in blank samples
+2. Handle missing values (zeros) from features below detection limits
+3. Normalize for unwanted variation in sample concentration (dilution effects)
+4. Scale features so that high-abundance metabolites don't dominate the analysis
+
+## Setup
+
+```{python}
+#| label: setup
+import logging
+import sys
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+
+# Add project root to path for imports
+project_root = Path.cwd().parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+from src.preprocessing import (
+    build_preprocessing_pipeline,
+    filter_blanks,
+    handle_zeros,
+    load_gnps_quant_table,
+    load_metadata,
+    pareto_scale,
+    pqn_normalize,
+)
+
+# Configure logging so we can see pipeline messages
+logging.basicConfig(level=logging.INFO, format="%(name)s — %(message)s")
+
+# Plot style
+sns.set_theme(style="whitegrid", palette="colorblind")
+plt.rcParams["figure.dpi"] = 120
+```
+
+```{python}
+#| label: paths
+DATA_DIR = project_root / "data" / "CD-MRG-metabolomics_summerschool_2023"
+
+forearm_path = DATA_DIR / "forearm_iimn_gnps_quant.csv"
+forehead_path = DATA_DIR / "forehead_iimn_gnps_quant.csv"
+metadata_path = DATA_DIR / "metadata.txt"
+```
+
+## Step 1: Load Data
+
+We start by loading the GNPS quantification table. The function separates **feature
+metadata** (m/z, retention time, ion mobility, etc.) from the **peak area matrix**.
+
+```{python}
+#| label: load-data
+feature_meta, peak_areas = load_gnps_quant_table(forearm_path)
+```
+
+```{python}
+#| label: inspect-features
+print(f"Feature metadata: {feature_meta.shape[0]} features x {feature_meta.shape[1]} columns")
+feature_meta.head()
+```
+
+```{python}
+#| label: inspect-peak-areas
+print(f"Peak area matrix: {peak_areas.shape[0]} features x {peak_areas.shape[1]} samples")
+print(f"\nPeak area summary statistics:")
+peak_areas.iloc[:5, :5]
+```
+
+::: {.callout-tip}
+## Data structure
+
+The GNPS quant table contains **13 metadata columns** (m/z, retention time, ion mobility,
+correlation group, etc.) and the remaining columns are peak areas for each sample. Column
+names follow the pattern `<filename> Peak area` — the loading function strips the suffix
+automatically.
+:::
+
+## Step 2: Understand the Experimental Design
+
+```{python}
+#| label: load-metadata
+metadata = load_metadata(metadata_path)
+metadata.head()
+```
+
+```{python}
+#| label: design-summary
+print("Sample types:")
+print(metadata["sample_type"].value_counts().to_string())
+print(f"\nSubjects: {metadata['subject'].nunique()}")
+print(f"Timepoints: {sorted(metadata['timepoint'].dropna().unique())}")
+print(f"Locations: {metadata['location'].unique().tolist()}")
+```
+
+```{python}
+#| label: design-crosstab
+# Crosstab of subjects x timepoints (excluding blanks)
+samples = metadata[~metadata["is_blank"]].copy()
+ct = pd.crosstab(samples["subject"], samples["timepoint"])
+ct
+```
+
+## Step 3: Blank Filtering {#sec-blank-filtering}
+
+::: {.callout-warning}
+## Why filter blanks first?
+
+Blank samples (solvent or extraction blanks) capture background contamination from
+solvents, plasticware, and the instrument itself. Features that are primarily present in
+blanks rather than real samples are contaminants and will add noise to downstream analysis.
+Always filter blanks **before** other preprocessing steps.
+:::
+
+We keep only features where the mean intensity in real samples is at least **10x** the mean
+intensity in blanks.
+
+::: {.callout-important}
+## Human note:
+The Claude Code CLI original value was 3x. It seems consensual but the original notebook used 10, so I manually adapted.
+
+The painpoint was: it was hard-coded multiple time. I manually switched to a single variable definition `blank_ratio = 10`.
+➡ We may insist more on the best practices.
+:::
+
+```{python}
+#| label: blank-filter
+
+blank_ratio = 10
+n_features_before = peak_areas.shape[0]
+peak_areas_filtered, meta_no_blanks = filter_blanks(peak_areas, metadata, blank_ratio=blank_ratio)
+n_features_after = peak_areas_filtered.shape[0]
+
+print(f"Features before: {n_features_before}")
+print(f"Features after:  {n_features_after}")
+print(f"Removed:         {n_features_before - n_features_after}")
+print(f"Samples (blanks removed): {peak_areas_filtered.shape[1]}")
+```
+
+```{python}
+#| label: fig-blank-ratio
+#| fig-cap: "Distribution of sample-to-blank intensity ratios across features. Features below the 3x threshold (red dashed line) are removed as likely contaminants."
+
+# Recalculate ratios for visualization
+blank_files = set(metadata.loc[metadata["is_blank"], "filename"])
+all_files = set(peak_areas.columns)
+blank_cols = sorted(blank_files & all_files)
+sample_cols = sorted(all_files - blank_files)
+
+blank_mean = peak_areas[blank_cols].mean(axis=1)
+sample_mean = peak_areas[sample_cols].mean(axis=1)
+ratio = sample_mean / blank_mean.replace(0, np.nan)
+ratio_finite = ratio.dropna()
+
+fig, ax = plt.subplots(figsize=(8, 4))
+ax.hist(np.log10(ratio_finite.clip(lower=0.01)), bins=60, edgecolor="white", alpha=0.8)
+ax.axvline(np.log10(blank_ratio), color="red", linestyle="--", linewidth=2, label=f"{blank_ratio}x threshold")
+ax.set_xlabel("log₁₀(sample mean / blank mean)")
+ax.set_ylabel("Number of features")
+ax.set_title("Sample-to-Blank Intensity Ratio")
+ax.legend()
+plt.tight_layout()
+plt.show()
+```
+
+## Step 4: Zero Handling
+
+::: {.callout-note}
+## Why handle zeros?
+
+In LC-MS metabolomics, a zero value typically means the feature was **below the detection
+limit**, not truly absent. Features with too many zeros across samples are unreliable and
+should be removed. For the remaining zeros, we impute with **min/2** (half the minimum
+observed nonzero value for that feature) — a common conservative approach that avoids
+log-transform issues while acknowledging the value was small.
+:::
+
+::: {.callout-important}
+## Human note:
+It's quite a bad idea to impute with a constant value because it artificially lowers the variability of these features.
+The original notebooks used a random value between 0 and the minimum.
+
+I keep it as is for educational reasons: in Boccard & Rudaz, 2018, imputation is not mentioned.
+Claude here seems to have improvised with a very common mispractice.
+This emphasizes how important it is to read, understand what is happening, and update skills based on your expertise.
+:::
+
+
+```{python}
+#| label: fig-zero-counts
+#| fig-cap: "Distribution of zero counts per feature before filtering. Features with more than 50% zeros (red dashed line) are removed."
+
+zero_counts = (peak_areas_filtered == 0).sum(axis=1)
+n_samples = peak_areas_filtered.shape[1]
+
+fig, ax = plt.subplots(figsize=(8, 4))
+ax.hist(zero_counts, bins=40, edgecolor="white", alpha=0.8)
+ax.axvline(n_samples * 0.5, color="red", linestyle="--", linewidth=2,
+           label=f"50% threshold ({n_samples * 0.5:.0f} samples)")
+ax.set_xlabel("Number of zeros per feature")
+ax.set_ylabel("Number of features")
+ax.set_title("Zero Distribution Across Features")
+ax.legend()
+plt.tight_layout()
+plt.show()
+```
+
+```{python}
+#| label: handle-zeros
+n_before_zero = peak_areas_filtered.shape[0]
+peak_areas_imputed = handle_zeros(peak_areas_filtered, max_zero_ratio=0.5)
+n_after_zero = peak_areas_imputed.shape[0]
+
+print(f"Features before: {n_before_zero}")
+print(f"Features after:  {n_after_zero}")
+print(f"Removed:         {n_before_zero - n_after_zero}")
+print(f"Remaining zeros: {(peak_areas_imputed == 0).sum().sum()}")
+```
+
+## Step 5: PQN Normalization
+
+::: {.callout-note}
+## Probabilistic Quotient Normalization (PQN)
+
+PQN is preferred over simpler methods like **Total Sum Normalization (TSN)** because it is
+robust to the presence of large biological changes. The algorithm:
+
+1. Calculate a **reference spectrum** (median across all samples)
+2. For each sample, compute the **quotient** of each feature to the reference
+3. The **median quotient** becomes the normalization factor
+
+This captures the overall dilution effect without being influenced by features that change
+due to the biological response.
+:::
+
+::: {.callout-important}
+## Human note:
+Here, Claude's code uses PQN as suggested by Boccard & Rudaz, 2018 (along with TSN and MSTUS).  
+In the original notebook, they consider PQN but, in fact, they end up using only autoscale.  
+This choice is quite surprising to me and goes against Boccard's recommendations, so I stick with PQN.  
+Anyway, Pareto scaling comes afterward, and it is quite similar to autoscaling (division by the square root of the standard deviation).
+:::
+
+```{python}
+#| label: pqn-normalize
+# Transpose to samples x features (PQN expects this orientation)
+X = peak_areas_imputed.values.T
+
+# Total intensity per sample before normalization
+total_before = X.sum(axis=1)
+
+X_norm = pqn_normalize(X)
+
+total_after = X_norm.sum(axis=1)
+```
+
+```{python}
+#| label: fig-pqn-boxplot
+#| fig-cap: "Total intensity per sample before and after PQN normalization. PQN reduces systematic intensity differences between samples while preserving relative biological variation."
+#| fig-subcap:
+#|   - "Before PQN"
+#|   - "After PQN"
+
+# Before PQN
+fig, ax = plt.subplots(figsize=(7, 5))
+ax.boxplot(total_before, vert=True)
+ax.set_title("Before PQN")
+ax.set_ylabel("Total intensity per sample")
+ax.set_xticks([])
+plt.tight_layout()
+plt.show()
+
+# After PQN
+fig, ax = plt.subplots(figsize=(7, 5))
+ax.boxplot(total_after, vert=True)
+ax.set_title("After PQN")
+ax.set_ylabel("Total intensity per sample")
+ax.set_xticks([])
+plt.tight_layout()
+plt.show()
+```
+
+::: {.callout-tip}
+## Interpreting the normalization
+
+After PQN, sample total intensities should be more uniform. However, PQN does **not** make
+all samples equal in total intensity (that would be TSN). The remaining variation reflects
+genuine biological differences.
+:::
+
+## Step 6: Pareto Scaling
+
+::: {.callout-note}
+## Pareto scaling: a balanced approach
+
+Pareto scaling divides each mean-centered feature by the **square root of its standard
+deviation**. This is a middle ground between:
+
+- **No scaling**: high-abundance features dominate multivariate analysis
+- **Unit variance (UV) scaling**: all features weighted equally, amplifying noise in
+  low-abundance features
+
+Pareto scaling reduces the impact of large peaks while preserving more of the original
+data structure than UV scaling.
+:::
+
+```{python}
+#| label: pareto-scale
+variance_before = X_norm.var(axis=0)
+X_scaled = pareto_scale(X_norm)
+variance_after = X_scaled.var(axis=0)
+```
+
+```{python}
+#| label: fig-pareto-variance
+#| fig-cap: "Feature variance distribution before and after Pareto scaling. Scaling compresses the dynamic range, reducing the dominance of high-variance features."
+#| fig-subcap:
+#|   - "Before Pareto scaling"
+#|   - "After Pareto scaling"
+
+# Before Pareto scaling
+fig, ax = plt.subplots(figsize=(7, 5))
+ax.hist(np.log10(variance_before + 1e-10), bins=50, edgecolor="white", alpha=0.8)
+ax.set_xlabel("log₁₀(variance)")
+ax.set_ylabel("Number of features")
+ax.set_title("Before Pareto Scaling")
+plt.tight_layout()
+plt.show()
+
+# After Pareto scaling
+fig, ax = plt.subplots(figsize=(7, 5))
+ax.hist(np.log10(variance_after + 1e-10), bins=50, edgecolor="white", alpha=0.8, color="C1")
+ax.set_xlabel("log₁₀(variance)")
+ax.set_ylabel("Number of features")
+ax.set_title("After Pareto Scaling")
+plt.tight_layout()
+plt.show()
+```
+
+## Step 7: Full Pipeline
+
+Now let's run the complete pipeline using `build_preprocessing_pipeline()`, which applies
+all the steps above to both **forearm** and **forehead** datasets in one call.
+
+```{python}
+#| label: full-pipeline
+result = build_preprocessing_pipeline(
+    forearm_path=forearm_path,
+    forehead_path=forehead_path,
+    metadata_path=metadata_path,
+    blank_ratio=blank_ratio,
+    max_zero_ratio=0.5,
+)
+
+for name in ["forearm", "forehead"]:
+    X = result[name]["X_processed"]
+    print(f"{name.capitalize()}: {X.shape[0]} samples x {X.shape[1]} features")
+```
+
+```{python}
+#| label: fig-pipeline-summary
+#| fig-cap: "Number of features retained at each preprocessing step for both datasets."
+
+# Reconstruct feature counts at each step by re-running steps individually
+pipeline_counts = {}
+for name, path in [("Forearm", forearm_path), ("Forehead", forehead_path)]:
+    meta_full = load_metadata(metadata_path)
+    fm, pa = load_gnps_quant_table(path)
+    n_raw = pa.shape[0]
+
+    pa_filt, meta_nb = filter_blanks(pa, meta_full, blank_ratio=blank_ratio)
+    n_blank_filtered = pa_filt.shape[0]
+
+    pa_imp = handle_zeros(pa_filt, max_zero_ratio=0.5)
+    n_zero_handled = pa_imp.shape[0]
+
+    pipeline_counts[name] = {
+        "Raw": n_raw,
+        "After blank filter": n_blank_filtered,
+        "After zero handling": n_zero_handled,
+    }
+
+# Plot
+steps = ["Raw", "After blank filter", "After zero handling"]
+x = np.arange(len(steps))
+width = 0.35
+
+fig, ax = plt.subplots(figsize=(9, 5))
+forearm_counts = [pipeline_counts["Forearm"][s] for s in steps]
+forehead_counts = [pipeline_counts["Forehead"][s] for s in steps]
+
+bars1 = ax.bar(x - width / 2, forearm_counts, width, label="Forearm")
+bars2 = ax.bar(x + width / 2, forehead_counts, width, label="Forehead")
+
+ax.set_ylabel("Number of features")
+ax.set_title("Feature Retention Through Preprocessing Pipeline")
+ax.set_xticks(x)
+ax.set_xticklabels(steps)
+ax.legend()
+
+# Add value labels on bars
+for bars in [bars1, bars2]:
+    for bar in bars:
+        height = bar.get_height()
+        ax.annotate(f"{int(height)}",
+                    xy=(bar.get_x() + bar.get_width() / 2, height),
+                    xytext=(0, 3), textcoords="offset points",
+                    ha="center", va="bottom", fontsize=9)
+
+plt.tight_layout()
+plt.show()
+```
+
+## Summary
+
+::: {.callout-note}
+## Pipeline recap
+
+We applied the following preprocessing steps to untargeted LC-MS metabolomics data:
+
+| Step | Purpose | Method |
+|------|---------|--------|
+| **Blank filtering** | Remove contaminant features | Keep features with sample/blank ratio ≥ 3 |
+| **Zero handling** | Remove unreliable features, impute missing values | Remove features with >50% zeros, impute with min/2 |
+| **PQN normalization** | Correct for dilution effects | Divide by median quotient to reference spectrum |
+| **Pareto scaling** | Balance feature influence | Mean-center, divide by √(std) |
+:::
+
+::: {.callout-tip}
+## Key takeaways
+
+- **Order matters**: blank filtering should come first, scaling last
+- **PQN > TSN**: PQN is more robust to large biological changes
+- **Pareto scaling** is a good default for metabolomics — it balances between no scaling and unit variance
+- **Always visualize** the effect of each step to catch issues early
+- The pipeline reduced features from thousands to hundreds of reliable, well-behaved signals ready for multivariate analysis
+:::
+
+## Save Processed Data for Downstream Analysis
+
+Save the preprocessed data using pickle (Python's equivalent to R's `.rds` format) for use in subsequent analyses (PCA, PLS-DA, biomarker discovery, etc.).
+
+```{python}
+#| label: save-data
+import pickle
+
+# Create output directory
+output_dir = project_root / "data"
+output_dir.mkdir(exist_ok=True)
+
+# Save complete result dictionary with all datasets
+pickle_path = output_dir / "preprocessing_result.pkl"
+with open(pickle_path, "wb") as f:
+    pickle.dump(result, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+print(f"✓ Saved preprocessing results to: {pickle_path}")
+print(f"\nSaved objects:")
+print(f"  - forearm: {result['forearm']['X_processed'].shape[0]} samples × {result['forearm']['X_processed'].shape[1]} features")
+print(f"  - forehead: {result['forehead']['X_processed'].shape[0]} samples × {result['forehead']['X_processed'].shape[1]} features")
+print(f"  - metadata for both datasets")
+print(f"  - feature metadata for both datasets")
+```
+
+::: {.callout-note}
+## Loading preprocessed data for downstream analysis
+
+To use this file in your next analysis script:
+
+```python
+import pickle
+
+# Load the complete results
+with open("data/preprocessing_result.pkl", "rb") as f:
+    result = pickle.load(f)
+
+# Access preprocessed data
+X_forearm = result["forearm"]["X_processed"]        # samples × features array
+X_forehead = result["forehead"]["X_processed"]
+
+# Access metadata
+metadata_forearm = result["forearm"]["metadata"]    # sample metadata DataFrame
+feature_meta_forearm = result["forearm"]["feature_metadata"]  # feature annotations
+
+# Access identifiers
+sample_names = result["forearm"]["sample_names"]    # list of sample IDs
+feature_ids = result["forearm"]["feature_ids"]      # list of feature IDs
+```
+
+**What's included in the pickle file:**
+
+For each dataset (`forearm` and `forehead`):
+- `X_processed`: Preprocessed data matrix (numpy array, samples × features)
+- `metadata`: Sample metadata (DataFrame: subject, timepoint, location, etc.)
+- `feature_metadata`: Feature annotations (DataFrame: m/z, RT, ion mobility, etc.)
+- `sample_names`: Sample identifiers (list)
+- `feature_ids`: Feature identifiers (list)
+- `peak_areas_raw`: Raw peak areas after blank/zero filtering (DataFrame)
+
+Plus `metadata_full`: Complete metadata for all samples including blanks.
+:::

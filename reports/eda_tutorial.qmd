@@ -1,0 +1,446 @@
+---
+title: "Exploratory Data Analysis for Metabolomics"
+subtitle: "PCA, outlier detection, and quality control for LC-MS diphenhydramine pharmacokinetics data"
+author: "Alban Ott (Claude Code CLI)"
+date: "2026/02/09"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: false
+    number-sections: true
+    self-contained: true
+execute:
+  warning: false
+---
+
+## Learning Objectives
+
+::: {.callout-note}
+## What you will learn
+
+- Summarize preprocessed metabolomics datasets with key quality metrics
+- Visualize intensity distributions to detect batch effects or outliers
+- Perform PCA for quality control and pattern discovery
+- Interpret PCA score plots colored by experimental factors (sample type, subject, timepoint)
+- Use Hotelling's T2 statistic for multivariate outlier detection
+- Compare forearm and forehead sampling sites systematically
+:::
+
+## Background
+
+Before building any predictive or classification model, exploratory data analysis (EDA) is
+essential to:
+
+1. **Summarize** the dataset dimensions, intensity ranges, and experimental design
+2. **Detect issues** such as batch effects, outliers, or systematic biases
+3. **Discover patterns** in the data that inform downstream modeling choices
+
+For metabolomics data, PCA is the workhorse of EDA. It reduces hundreds of features to a
+few principal components that capture the dominant sources of variation. By coloring PCA
+score plots with experimental metadata, we can assess whether biological factors (drug
+treatment, subject, timepoint) drive the variation or whether technical artifacts dominate.
+
+Hotelling's T2 provides a formal multivariate outlier detection criterion based on the PCA
+model, complementing visual inspection of score plots.
+
+## Setup
+
+```{python}
+#| label: setup
+import logging
+import pickle
+import sys
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+
+# Add project root to path for imports
+project_root = Path.cwd().parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+from src.eda import (
+    compute_hotelling_t2,
+    dataset_summary,
+    perform_pca,
+    plot_explained_variance,
+    plot_hotelling_t2,
+    plot_intensity_distribution,
+    plot_pca_scores,
+    plot_pca_scores_interactive,
+)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(name)s — %(message)s")
+
+# Plot style
+sns.set_theme(style="whitegrid", palette="colorblind")
+plt.rcParams["figure.dpi"] = 120
+```
+
+```{python}
+#| label: load-data
+# Load preprocessed data from Phase 2
+pickle_path = project_root / "data" / "preprocessing_result.pkl"
+with open(pickle_path, "rb") as f:
+    result = pickle.load(f)
+
+# Extract datasets
+X_forearm = result["forearm"]["X_processed"]
+X_forehead = result["forehead"]["X_processed"]
+meta_forearm = result["forearm"]["metadata"]
+meta_forehead = result["forehead"]["metadata"]
+feat_forearm = result["forearm"]["feature_metadata"]
+feat_forehead = result["forehead"]["feature_metadata"]
+
+print(f"Forearm:  {X_forearm.shape[0]} samples x {X_forearm.shape[1]} features")
+print(f"Forehead: {X_forehead.shape[0]} samples x {X_forehead.shape[1]} features")
+```
+
+## Dataset Summary
+
+A quick overview of both datasets helps verify that preprocessing completed correctly and
+highlights key characteristics.
+
+```{python}
+#| label: dataset-summary
+summary_forearm = dataset_summary(X_forearm, meta_forearm, feat_forearm)
+summary_forehead = dataset_summary(X_forehead, meta_forehead, feat_forehead)
+```
+
+```{python}
+#| label: tbl-summary
+#| tbl-cap: "Dataset summary for forearm and forehead sampling sites."
+#| echo: false
+from itables import show
+
+summary_rows = [
+    ("Samples", summary_forearm["n_samples"], summary_forehead["n_samples"]),
+    ("Features", summary_forearm["n_features"], summary_forehead["n_features"]),
+    ("Subjects", summary_forearm["n_subjects"], summary_forehead["n_subjects"]),
+    ("Timepoints", summary_forearm["n_timepoints"], summary_forehead["n_timepoints"]),
+    ("Zeros remaining", summary_forearm["zero_count"], summary_forehead["zero_count"]),
+    ("Zero fraction", f"{summary_forearm['zero_fraction']:.4f}", f"{summary_forehead['zero_fraction']:.4f}"),
+    ("Intensity range (abs)", f"{summary_forearm['intensity_min']:.2f} – {summary_forearm['intensity_max']:.2f}",
+     f"{summary_forehead['intensity_min']:.2f} – {summary_forehead['intensity_max']:.2f}"),
+    ("Dynamic range (log10)", f"{summary_forearm['dynamic_range_log10']:.1f}", f"{summary_forehead['dynamic_range_log10']:.1f}"),
+    ("m/z range", f"{summary_forearm['mz_range'][0]:.1f} – {summary_forearm['mz_range'][1]:.1f}",
+     f"{summary_forehead['mz_range'][0]:.1f} – {summary_forehead['mz_range'][1]:.1f}"),
+    ("RT range (min)", f"{summary_forearm['rt_range'][0]:.1f} – {summary_forearm['rt_range'][1]:.1f}",
+     f"{summary_forehead['rt_range'][0]:.1f} – {summary_forehead['rt_range'][1]:.1f}"),
+]
+
+summary_df = pd.DataFrame(summary_rows, columns=["Metric", "Forearm", "Forehead"])
+show(summary_df, paging=False, searching=False, info=False, ordering=False)
+```
+
+## Intensity Distributions
+
+Total absolute intensity per sample reveals whether any samples have unusually low or high
+overall signal, which could indicate injection failures, dilution errors, or contamination.
+
+```{python}
+#| label: fig-intensity-dist
+#| fig-cap: "Total absolute intensity per sample by sample type (a) forearm and (b) forehead."
+#| fig-subcap:
+#|   - "forearm"
+#|   - "forehead"
+
+fig, axes = plt.subplots(2, 1, figsize=(7, 12))
+
+plot_intensity_distribution(X_forearm, meta_forearm, group_col="sample_type", ax=axes[0])
+axes[0].set_title("Forearm — Intensity by Sample Type")
+
+plot_intensity_distribution(X_forehead, meta_forehead, group_col="sample_type", ax=axes[1])
+axes[1].set_title("Forehead — Intensity by Sample Type")
+
+plt.tight_layout()
+plt.show()
+```
+
+::: {.callout-tip}
+## Reading intensity box plots
+
+- **QC samples** should cluster tightly (low variance) — they are repeated injections of the
+  same pooled sample and serve as a measure of analytical reproducibility
+- **Study samples** naturally show more variation due to biological differences
+- Large differences between QC and study medians may indicate normalization issues
+:::
+
+## PCA Quality Control
+
+### Scree Plot
+
+The scree plot shows how much variance each principal component explains. A steep drop
+after the first few components suggests strong structure in the data.
+
+```{python}
+#| label: pca-fit
+# Fit PCA on both datasets
+pca_forearm = perform_pca(X_forearm, n_components=10)
+pca_forehead = perform_pca(X_forehead, n_components=10)
+```
+
+```{python}
+#| label: fig-scree
+#| fig-cap: "Scree plots showing individual (bars) and cumulative (line) explained variance (a) forearm and (b) forehead."
+#| fig-subcap:
+#|   - "forearm"
+#|   - "forehead"
+
+# First plot - Forearm
+ax = plot_explained_variance(pca_forearm)
+ax.set_title("Forearm — Scree Plot")
+plt.show()
+
+# Second plot - Forehead
+ax = plot_explained_variance(pca_forehead)
+ax.set_title("Forehead — Scree Plot")
+plt.show()
+```
+
+### Score Plot — Sample Type
+
+Coloring by sample type reveals whether QC samples cluster (good analytical precision) and
+whether study samples separate from QCs (expected biological variation).
+
+```{python}
+#| label: fig-scores-sampletype
+#| fig-cap: "PCA score plots (PC1 vs PC2) colored by sample type (a) forearm and (b) forehead."
+#| fig-subcap:
+#|   - "forearm"
+#|   - "forehead"
+
+from plotly.subplots import make_subplots
+
+fig_forearm = plot_pca_scores_interactive(
+  pca_forearm, meta_forearm, color_by="sample_type"
+)
+fig_forearm.update_layout(title="Forearm — by Sample Type")
+fig_forearm.show()
+
+fig_forehead = plot_pca_scores_interactive(
+  pca_forehead, meta_forehead, color_by="sample_type"
+)
+fig_forehead.update_layout(title="Forehead — by Sample Type")
+fig_forehead.show()
+```
+
+### Score Plot — Subject
+
+Subject-level coloring reveals inter-individual variation, which is a dominant source of
+variance in pharmacokinetics studies.
+
+```{python}
+#| label: fig-scores-subject
+#| fig-cap: "PCA score plots (PC1 vs PC2) colored by subject (a) forearm and (b) forehead."
+#| fig-subcap:
+#|   - "forearm"
+#|   - "forehead"
+
+fig_forearm = plot_pca_scores_interactive(
+    pca_forearm, meta_forearm, color_by="subject"
+)
+fig_forearm.update_layout(title="Forearm — by Subject")
+fig_forearm.show()
+
+fig_forehead = plot_pca_scores_interactive(
+    pca_forehead, meta_forehead, color_by="subject"
+)
+fig_forehead.update_layout(title="Forehead — by Subject")
+fig_forehead.show()
+```
+
+### Score Plot — Timepoint
+
+Timepoint coloring shows whether the drug treatment creates a temporal trajectory in the
+metabolic profile. Timepoints are converted to strings for categorical coloring.
+
+```{python}
+#| label: fig-scores-timepoint
+#| fig-cap: "PCA score plots (PC1 vs PC2) colored by timepoint (a) forearm and (b) forehead."
+#| fig-subcap:
+#|   - "forearm"
+#|   - "forehead"
+
+fig_forearm = plot_pca_scores_interactive(
+    pca_forearm, meta_forearm, color_by="timepoint"
+)
+fig_forearm.update_layout(title="Forearm — by Timepoint")
+fig_forearm.show()
+
+fig_forehead = plot_pca_scores_interactive(
+    pca_forehead, meta_forehead, color_by="timepoint"
+)
+fig_forehead.update_layout(title="Forehead — by Timepoint")
+fig_forehead.show()
+```
+
+::: {.callout-tip}
+## Reading PCA score plots
+
+- **Tight QC cluster**: Good analytical reproducibility — instrument drift is minimal
+- **Group separation**: Samples separate by biological factor (subject, timepoint) — the
+  factor drives metabolic variation
+- **Outliers far from center**: Samples with unusual metabolic profiles — investigate with
+  Hotelling's T2 below
+- **Percentage on axes**: Higher % means the component captures more variation. PC1 > PC2 by
+  definition
+- **Reference lines at 0**: Help identify which quadrant samples fall in, useful for
+  interpreting loadings
+:::
+
+## Outlier Detection
+
+Hotelling's T2 is a multivariate distance metric based on the PCA model. Samples with
+T2 values exceeding the threshold are potential outliers that warrant investigation.
+
+```{python}
+#| label: hotelling-t2
+# Compute T2 using the first 5 components
+t2_forearm = compute_hotelling_t2(pca_forearm["scores"], n_components=5)
+t2_forehead = compute_hotelling_t2(pca_forehead["scores"], n_components=5)
+```
+
+```{python}
+#| label: fig-t2
+#| fig-cap: "Hotelling's T2 outlier detection (a) forearm and (b) forehead. Red bars exceed the 2x threshold."
+#| fig-subcap:
+#|   - "forearm"
+#|   - "forehead"
+
+# First plot - Forearm
+ax = plot_hotelling_t2(
+    t2_forearm["t2_scores"],
+    t2_forearm["t2_limit"],
+    sample_names=result["forearm"]["sample_names"],
+)
+ax.set_title("Forearm — Hotelling's T$^2$")
+plt.show()
+
+# Second plot - Forehead
+ax = plot_hotelling_t2(
+    t2_forehead["t2_scores"],
+    t2_forehead["t2_limit"],
+    sample_names=result["forehead"]["sample_names"],
+)
+ax.set_title("Forehead — Hotelling's T$^2$")
+plt.show()
+
+```
+
+**Forearm**: `{python} t2_forearm['n_outliers']` outlier(s) detected. T² limit: `{python} f"{t2_forearm['t2_limit']:.2f}"`, threshold (2×): `{python} f"{t2_forearm['t2_limit'] * 2:.2f}"`.
+
+```{python}
+#| label: tbl-outlier-forearm
+#| echo: false
+from itables import show
+
+if t2_forearm["n_outliers"] > 0:
+    outlier_idx = np.where(t2_forearm["outlier_mask"])[0]
+    outlier_meta = meta_forearm.iloc[outlier_idx][
+        ["filename", "sample_type", "subject", "timepoint"]
+    ].copy()
+    outlier_meta["T2_score"] = t2_forearm["t2_scores"][outlier_idx]
+
+    # Rename columns for display
+    outlier_meta.columns = ["Filename", "Sample Type", "Subject", "Timepoint", "T² Score"]
+
+    # Format T² Score to 2 decimals
+    outlier_meta["T² Score"] = outlier_meta["T² Score"].round(2)
+
+    show(outlier_meta, paging=False, searching=False, info=False, ordering=True)
+else:
+    print("No outliers detected.")
+```
+
+**Forehead**: `{python} t2_forehead['n_outliers']` outlier(s) detected. T² limit: `{python} f"{t2_forehead['t2_limit']:.2f}"`, threshold (2×): `{python} f"{t2_forehead['t2_limit'] * 2:.2f}"`.
+
+```{python}
+#| label: tbl-outlier-forehead
+#| echo: false
+from itables import show
+
+if t2_forehead["n_outliers"] > 0:
+    outlier_idx = np.where(t2_forehead["outlier_mask"])[0]
+    outlier_meta = meta_forehead.iloc[outlier_idx][
+        ["filename", "sample_type", "subject", "timepoint"]
+    ].copy()
+    outlier_meta["T2_score"] = t2_forehead["t2_scores"][outlier_idx]
+
+    # Rename columns for display
+    outlier_meta.columns = ["Filename", "Sample Type", "Subject", "Timepoint", "T² Score"]
+
+    # Format T² Score to 2 decimals
+    outlier_meta["T² Score"] = outlier_meta["T² Score"].round(2)
+
+    show(outlier_meta, paging=False, searching=False, info=False, ordering=True)
+else:
+    print("No outliers detected.")
+```
+
+::: {.callout-warning}
+## Handling outliers
+
+Outliers detected by Hotelling's T2 are not automatically removed. Before excluding any
+sample, consider:
+
+1. **Is it a QC sample?** QC outliers indicate instrument issues at that injection point
+2. **Is it a study sample?** The outlier may reflect genuine biological variation (e.g., a
+   strong drug responder)
+3. **Does it appear in both forearm and forehead?** Consistent outliers across sites suggest
+   a subject-level issue, not a site-specific artifact
+4. **Check the original chromatograms** if possible to rule out injection failures
+
+For this tutorial, we report outliers but do not remove them. Removal decisions should be
+made with domain knowledge and documented with justification.
+:::
+
+## Summary
+
+```{python}
+#| label: tbl-comparison
+#| tbl-cap: "Comparison of forearm and forehead datasets after EDA."
+#| echo: false
+from itables import show
+
+comparison_rows = [
+    ("Samples", summary_forearm["n_samples"], summary_forehead["n_samples"]),
+    ("Features", summary_forearm["n_features"], summary_forehead["n_features"]),
+    ("PC1 variance (%)", f"{pca_forearm['explained_variance'][0]:.1%}", f"{pca_forehead['explained_variance'][0]:.1%}"),
+    ("PC1+PC2 variance (%)", f"{pca_forearm['cumulative_variance'][1]:.1%}", f"{pca_forehead['cumulative_variance'][1]:.1%}"),
+    ("5-PC cumulative (%)", f"{pca_forearm['cumulative_variance'][4]:.1%}", f"{pca_forehead['cumulative_variance'][4]:.1%}"),
+    ("T2 outliers (5 PCs)", t2_forearm["n_outliers"], t2_forehead["n_outliers"]),
+]
+
+comparison_df = pd.DataFrame(comparison_rows, columns=["Metric", "Forearm", "Forehead"])
+show(comparison_df, paging=False, searching=False, info=False, ordering=False)
+```
+
+::: {.callout-note}
+## Key findings
+
+- **PCA captures the dominant structure** in the data with the first few components
+  explaining a substantial fraction of total variance
+- **QC samples** provide a benchmark for analytical reproducibility — their clustering in PCA
+  score plots confirms consistent instrument performance
+- **Subject and timepoint effects** are visible in the PCA, supporting the pharmacokinetics
+  study design where metabolic profiles change over time after drug application
+- **Hotelling's T2** identifies samples that deviate multivariate from the population — these
+  warrant investigation but are not automatically excluded
+:::
+
+::: {.callout-tip}
+## Next steps
+
+With EDA complete, the data is ready for:
+
+1. **Supervised modeling** (PLS-DA, OPLS-DA) to identify features that discriminate between
+   timepoints or treatment conditions
+2. **Biomarker discovery** using variable importance in projection (VIP) scores
+3. **Pathway analysis** to connect discriminating features to biological pathways
+:::

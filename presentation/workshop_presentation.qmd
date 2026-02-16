@@ -1,0 +1,1201 @@
+---
+title: "Vibe Coding for Chemometrics"
+subtitle: "Building AI-Assisted Analysis Workflows from Scratch"
+author: "Alban Ott"
+format:
+  revealjs:
+    theme: [default, custom.scss]
+    fontsize: 200%
+    incremental: false
+    slide-number: true
+    preview-links: auto
+    transition: slide
+    background-transition: fade
+    code-line-numbers: false
+    self-contained: true
+    flashcards: 
+      showFlipButton: false
+revealjs-plugins:
+  - parmsam/flashcards
+bibliography: references.bib
+from: markdown+emoji
+---
+
+## Definition {.smaller}
+
+
+::: {.columns}
+::: {.column width="50%"}
+<br>
+- **"Pure" vibe coding:** In its most exploratory form, a user might fully trust the AI's output to work as intended. As [Karpathy framed it](https://x.com/karpathy/status/1886192184808149383?), this is akin to "forgetting that the code even exists," making it best suited for rapid ideation or what he called "throwaway weekend projects," where speed is the primary goal.
+<br><br><br>
+- **Responsible AI-assisted development:** This is the practical and professional application of the concept. In this model, AI tools act as a powerful collaborator or "pair programmer." The user guides the AI but then reviews, tests, and understands the code it generates, taking full ownership of the final product.
+:::
+
+::: {.column width="50%"}
+![](../assets/bad_vibecoding_vs_good_vibe_coding.png){width=100%}
+:::
+:::
+
+::: footer
+[@googlecloud2025vibecoding]
+:::
+
+## Want to Try It Yourself?
+
+- I will use Claude Code, but it should also work quite well with GitHub Copilot, Cursor, Windsurf, and others.
+   - I do not provide the license; it currently costs €18 per month for the Pro plan.
+   - It would allow you to reproduce some of what I will show you, but not all for usage limitations (detailed later).
+- I also have GitHub Copilot activated because it is the one I actually use daily in my job.
+- I use VS Code; AI integration is very good.
+- Clone this repository from GitHub: [https://github.com/AlbanOtt/chemometrics_vibe_coding](https://github.com/AlbanOtt/chemometrics_vibe_coding)
+
+# 1. Introduction {background-color="#2c5282"}
+
+## What We Will Cover Today 👀
+
+We will go backward: from the final reports to the construction of a vibe coding environment.
+
+- A complete Vibe Coded report
+- Some limitations and pitfalls
+- How to run the Vibe Coded
+- How to prepare for Vibe Coding
+- Introduction to two main Claude Code features: `claude.md` and `skill.md`
+- Two Claude Code settings: privacy and usage
+- Claude Code usage and cybersecurity
+
+::: footer
+![](../assets/Claude_AI_logo.png){width=10%}
+:::
+
+## What We Will NOT Cover Today 🙈 {.smaller}
+
+- **Subagents**
+   - Define specific workflows (see this in a job role, e.g., "code reviewer").
+   - If you want to go further, start here. This is really the missing feature of this workshop.
+- **Agent teams**
+   - Appeared a few days ago; still experimental. Seems crazy.
+- **Plugins**
+   - Bundles of skills and agents.
+- **Hooks**
+   - Deterministic function calling during agent workflow (e.g., use a code formatter after editing a `.py` file).
+- **MCP servers**
+   - Make your agent able to call APIs.
+
+## The Take-Home Messages 🧠
+
+- Not faster, but a different way of working.
+- Knowledge management.
+- Think like a manager: decompose work into well-defined departments.
+- It’s not pipelining or automation.
+- It probably writes nicer code than you do.
+
+## Not Faster
+
+
+::: {.columns}
+::: {.column width="50%"}
+The main claim about vibe coding is that you will be more efficient and accomplish more tasks.  
+
+
+I will be honest with you: I spent far more time preparing the vibe coding session than it would take me to perform such an analysis (at least in R).  
+However, now I can run multiple sessions. And I have documented my knowledge.
+:::
+
+::: {.column width="50%"}
+![](../assets/current_vs_vibe.png){width=100%}
+:::
+:::
+
+## Knowledge Management {.smaller}
+
+
+::: {.columns}
+::: {.column width="50%"}
+Knowledge shouldn't be shared orally between veterans and juniors.
+
+It should be documented and enriched by each generation.
+
+This includes not only scientific best practices but also internal best practices
+
+Example:
+
+> Personal data should be stored in a Google Cloud bucket with lifecycle management (maximum of 10 years).
+
+:::
+::: {.column width="50%"}
+![](../assets/bad_knowledge_management.png){width=100%}
+![](../assets/good_knowledge_management.png){width=100%}
+:::
+:::
+
+## Think Like a Manager: Decompose Work Into Well-Defined Departments. {.smaller}
+If you had to think of your job, lab, or company as an industry, what would be the different departments? How do they interact? How do they share information?
+
+*Example*: You are the head of research at a prominent pharmaceutical company.
+
+::: {.columns}
+::: {.column width="45%"}
+- **Department of Literature Review**
+    - Find relevant papers based on keywords
+    - Extract key information
+    - Identify new trends, update keyword searches
+    - Create a monthly digest of literature
+    - Maintain an informed state of the art of the field
+    - Identify potential collaborators
+:::
+::: {.column width="10%"}
+:::
+::: {.column width="45%"}
+- **Department of Data Collection**
+    - Find relevant open-access datasets
+    - Design data collection strategies
+    - Develop data management pipelines
+    - Assess data quality
+    - Maintain a strategy for creating foundational data for the lab
+    - Identify topics lacking data
+:::
+:::
+
+Basically, a department is an agent, and the missions are the skills; Today, we will focus on skills, not agents.
+
+## It's Not Pipelining/Automation
+
+We will write many guidelines for our AI agent (Claude Code). At some point, it might resemble a pipeline. 
+
+The key difference is that the details you provide about what you are doing can dramatically change the course of the analysis. 
+Also, you are less constrained by the developer’s pipeline and much more flexible, especially regarding the input. 
+
+My rule of thumb: 
+
+- For well-controlled data flow, with well-defined input and output formats: build a pipeline. (industry)
+- If you want to explore your data with many unanticipated iterations and maximum flexibility: use vibe coding. (science)
+
+Vibe Coding is not replacing anything, it is a new way of working.
+
+## It Probably Writes Nicer Code Than You {.smaller}
+
+**If** you don't know these tools well:
+
+- [Ruff](https://docs.astral.sh/ruff/) is an extremely fast Python code linter/formatter.
+- [Docstring](https://realpython.com/how-to-write-docstrings-in-python/) best practices.
+- [PEP8](https://peps.python.org/pep-0008/) style guide.
+- SOLID principles, PEP 484, Pythonic Idioms, testing strategy...
+
+If you already know these by heart, you are among the top 10% of high-quality Python developers... please leave; you will learn nothing here!!! 🤣
+
+By instructing your agent to follow these guidelines, you **bias the code generator** toward best practices in general.
+
+Finally, if your code (like mine) was primarily copied and pasted from **Stack Overflow**, it will probably be better.
+
+# 2. Final Result {background-color="#2c5282"}
+
+
+## Context 💉 {.smaller}
+
+The dataset comes from the 3rd International Summer School on Non-Targeted Metabolomics Data Mining for Biomedical Research. I found it on [GitHub](https://github.com/ssi-dk/CD-MRG-metabolomics_summerschool_2023) thanks to Perplexity.
+
+During this summer school, there was an exercise we are trying to reproduce using Vibe Coding:
+
+> Non-invasive drug monitoring is desirable as it improves patient experience. Instead of relying on invasive blood draws drug pharmacokinetics and metabolism could for example be monitored through the skin. During the summer school, you will be working with a subset of the data published by [Panitchpakdi and collaborators (2022)](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0271794). The datasets consists of plasma and skin swabs (forearm, forehead ~~and upper back~~) collected from healthy volunteers (n=7) over the course of 24 hours, who have been administered the antihistaminic diphenhydramine. Your task will be to investigate whether:
+>
+> - Diphenhydramine and its metabolites can be detected in the skin and whether it exhibits similar pharmacokinetics as in plasma?
+> - You can observe other metabolites that exhibit interesting time trends in plasma and whether those metabolites can also be detected in the skin?
+
+## The Reports 📊
+
+I asked to create Quarto notebooks with Python as the programming language.
+
+If you’re not familiar with [Quarto](https://quarto.org/), it is the successor to RMarkdown. In my opinion, it is far superior to Jupyter. Even these slides were created using Quarto.
+
+Want to learn more?  
+Please visit Mickaël Canouil’s course, "Mastering Quarto CLI: From Authoring to Publishing," at [https://m.canouil.dev/mastering-quarto-cli/](https://m.canouil.dev/mastering-quarto-cli/)
+
+The [report](../reports/_book/index.html).
+
+::: {.callout-note}
+🧠 During the tour, please ask yourself:
+
+***What is missing? What should we implement? What I would want to see?***
+:::
+
+## Home Page (index.qmd)
+
+We obtain a very nice introduction, it rephrased the project, isolated the questions.
+
+Then we have a nice Study Design section that helps to understand the dataset.
+
+However, here it states the study is IRB-approved. Of course it is, but I didn't tell it in the context and it had no access to the original paper.
+
+Hallucinations can be very tricky to identify!
+
+---
+
+Did you notice the trick I used in my prompt?
+
+::: {.incremental}
+- It mentions that it is a tutorial. Okay, it is... but the analysis actually isn't, so why?
+- Because I asked it to... but why did I?
+- Because I wanted a lot of explanations of what it was doing. In my personal experience, telling it that it is teaching material results in quite verbose but very clear reports.
+:::
+
+## Data Preprocessing
+
+[2  Metabolomics Data Preprocessing](../reports/_book/preprocessing_tutorial.html).
+
+See "Human notes":
+
+- [Bad coding practice](../reports/_book/preprocessing_tutorial.html#sec-blank-filtering)
+- [Bad imputation practice](../reports/_book/preprocessing_tutorial.html#step-4-zero-handling)
+- [PQN vs autoscale](../reports/_book/preprocessing_tutorial.html#step-5-pqn-normalization)
+
+## EDA
+
+- The [Timepoint PCA](../reports/_book/eda_tutorial.html) with Plotly really helps with interpretation.
+
+## Compound Detection
+
+- You should not only review the Quarto file but also the [.py file](https://github.com/AlbanOtt/chemometrics_vibe_coding/blob/7ddbef49031318cdd1f0cdbd92935640bbd40bf3/src/drug_detection.py#L22-L24).
+   - Claude independently found the m/z values of [Diphenhydramine](https://pubchem.ncbi.nlm.nih.gov/compound/Diphenhydramine#section=Spectral-Information), [N-desmethyl-DPH](https://pubchem.ncbi.nlm.nih.gov/compound/N-Desmethyldiphenhydramine#section=Chemical-Classes), and [DPH N-oxide](https://pubchem.ncbi.nlm.nih.gov/compound/65618#section=Spectral-Information).
+   - It took me only a few minutes to verify the values with Perplexity.
+
+---
+
+::: {.smaller}
+What about the original paper figures?
+
+::: {.callout-note .smaller}
+For some reason, I don't have the 24h in the dataset.
+:::
+
+::: {.columns}
+::: {.column width="50%"}
+![](../assets/original_paper_location_comparison.png){width=80%}
+:::
+::: {.column width="50%"}
+![](../assets/original_paper_location_comparison_Diphenhydramine.png){width=80%}
+![](../assets/original_paper_location_comparison_Diphenhydramine_N-oxide.png){width=80%}
+:::
+:::
+:::
+
+## Multivariate
+
+- We can find N-desmethyl-DPH [4312](../reports/_book/multivariate_tutorial.html#fig-vip-4) in the VIP.
+- We can find DPH N-oxide [5053](../reports/_book/multivariate_tutorial.html#fig-vip-4) in the VIP.
+- We can find Diphenhydramine [4589](../reports/_book/multivariate_tutorial.html#fig-vip-4) in the VIP.
+
+## Summary {.smaller}
+
+| Aspect            | Pros                                                     | Cons                                                         |
+|-------------------|----------------------------------------------------------|--------------------------------------------------------------|
+| **Speed**         | Full analysis completed in less than 2 hours, including waiting time | Needs to be split over several days due to Pro Plan limitations (reset after 4h30) |
+| **Output Quality**| Detailed reports explaining the reasons and findings | Focus on identifying "sabotage" rather than just "errors" |
+| **Methods**       | Primarily uses state-of-the-art methods | Fell into common pitfalls such as missing parameter settings and improper imputation |
+| **Validation**    | When comparable, results closely match both the original paper and summer school outcomes | — |
+| **Visualizations**| Attractive interactive plots | Required a second run to switch to Plotly |
+
+::: {.callout-note}
+I should be there max 45 minutes after the start, meaning before 10:15.
+
+Pause – 15 minutes.
+:::
+
+
+
+# 3. Vibe Coding in an Already Prepared Environment {background-color="#2c5282"}
+
+## Where Is Claude? 🗺
+
+Speaking of Claude, we must be clear about what we are talking about because there is quite a bunch of interfaces:
+
+- Web User Interface
+- Desktop app
+- VS Code extension
+- Claude CLI
+
+
+---
+
+Claude in a browser 🕸
+
+![](../assets/claude_in_browser.png)
+
+---
+
+Claude Desktop 💻
+
+![](../assets/claude_desktop.png)
+
+---
+
+Claude VS Code extension ⌨
+
+![](../assets/Claude_vscode_extension.png)
+
+---
+
+Claude CLI 📟
+
+![](../assets/claude_cli.png)
+
+## Claude CLI
+
+We want maximum control over what we are doing; thus, Claude CLI is the best choice.
+
+However, from time to time, I use the others for convenience. Here, we will use only Claude CLI.
+
+
+Launch claude with:
+``` bash
+claude
+``` 
+
+## Follow Your Usage (Aka: Credits)
+
+You should keep a close eye on your credits either with `usage` or on the web page [https://claude.ai/settings/usage](https://claude.ai/settings/usage)
+
+::: {.columns}
+::: {.column width="40%"}
+### CLI
+
+![](../assets/claude_usage_cli.png)
+:::
+::: {.column width="60%"}
+### Web
+
+![](../assets/claude_usage_web.png)
+:::
+:::
+
+---
+
+### Web
+
+![](../assets/claude_usage_web.png)
+
+::: {style="font-size: 0.85em"}
+A full session (reaching 100%) fills about 10% of the weekly limits.
+Thus, managing both the context and the model is really important if you reach the limits quite often (I do).
+Today, I ran a dummy claude query at 6am to obtain a reset at 11am.
+:::
+
+## Plan Mode: Explore Before You Change
+
+**The challenge:** Sometimes you need to understand the codebase before making changes
+
+**The solution:** Plan Mode - read-only exploration first
+
+Type `/plan` or press `Shift+Tab` twice to enter Plan Mode:
+
+::: {.incremental}
+- **Read-only operations**: No accidental changes during exploration
+- **Explore codebase**: Search for files, read code, understand structure
+- **Understand datasets**: Check formats, column names, existing preprocessing
+- **Design approach**: Plan implementation strategy
+- **Get approval**: Review plan before execution begins
+:::
+
+---
+
+Switch to plan mode, type `/plan` or press `Shift+Tab` twice.
+
+``` bash
+ ▐▛███▜▌   Claude Code v2.1.42
+▝▜█████▛▘  Sonnet 4.5 · Claude Pro
+  ▘▘ ▝▝    ~\chemometrics_vibe_coding
+
+❯ /plan
+⎿  Enabled plan mode
+───────────────────────────────────────────────────────────────────────
+❯
+───────────────────────────────────────────────────────────────────────
+⏸ plan mode on (shift+tab to cycle)      
+```
+
+
+---
+
+Switch to Opus 4.6 with command `/model`.
+
+``` bash
+ ▐▛███▜▌   Claude Code v2.1.42
+▝▜█████▛▘  Sonnet 4.5 · Claude Pro
+  ▘▘ ▝▝    ~\chemometrics_vibe_coding
+
+❯ /plan 
+  ⎿  Enabled plan mode
+
+❯ /model
+───────────────────────────────────────────────────────────
+Select model                                                                                                                                                                                     
+ Switch between Claude models. Applies to this session and future Claude Code sessions. For other/previous model names, specify with --model.                                                     
+
+   1. Default (recommended)  Opus 4.6 · Most capable for complex work
+ ❯ 2. Sonnet ✔               Sonnet 4.5 · Best for everyday tasks
+   3. Haiku                  Haiku 4.5 · Fastest for quick answers  
+
+ ▌▌▌ Effort not supported for Sonnet
+
+ Use /fast to turn on Fast mode (Opus 4.6 only). Now 50% off through Feb 16.
+
+ Enter to confirm · Esc to exit
+```
+
+---
+
+Opus 4.6 burns through your credits like crazy 🔥. For the workshop, I don’t want to run out of credits, so I’m using medium effort.  
+
+>The effort parameter allows you to control how eager Claude is to spend tokens when responding to requests. This lets you trade off between response thoroughness and token efficiency, all in a single model.
+
+For the implementation, we will switch to Sonnet 4.5 to save some credits.
+
+## First Prompt
+
+Ideally, YOU have an opinion on what is missing from the analysis, and we can try a live prompt.
+
+If not, let's say we have forgotten to implement the last phase of our initial plan.
+
+The prompt:
+
+``` bash 
+@data/CD-MRG-metabolomics_summerschool_2023/plan.md suggest 
+another analysis I could do with this dataset
+```
+
+Use @ to reference a file you absolutely want it to read.
+
+---
+
+Use `Ctrl+O` to see more details about what is going on.
+
+::: {style="font-size: 0.55em"}
+
+>❯ \@data/CD-MRG-metabolomics_summerschool_2023/plan.md suggest another analysis I could do with this dataset 
+>  ⎿  Read data\CD-MRG-metabolomics_summerschool_2023\plan.md (162 lines)
+>
+>∴ Thinking…
+>
+>  The user wants me to suggest another analysis they could do with their metabolomics dataset. Let me first explore what's already been implemented to understand what's done and what could be   
+>  added.
+>
+>● Let me explore what's already been implemented to understand the gaps and opportunities.
+>
+>● Explore(Explore existing analyses)\
+>⎿  Prompt:
+>       Explore the codebase to understand what analyses have already been implemented for this metabolomics project. I need to know:\
+>       1. What modules exist in src/ and what each one does (read the key functions)\
+>       2. What Quarto reports exist in reports/ and what analyses they cover\
+>       3. What the data structure looks like (check data/preprocessing_result.pkl loading patterns)\
+>       4. Whether there's a src/biomarkers.py module (it was in the plan but may not have been implemented)\
+>
+>Focus on identifying what's DONE vs what's MISSING from the original plan in data/CD-MRG-metabolomics_summerschool_2023/plan.md. Also look for any interesting analysis gaps - things not  
+>in the original plan that could be valuable.
+>
+>❯ Explore the codebase to understand what analyses have already been implemented for this metabolomics project. 
+:::
+
+Context exploration uses a lot of credits.
+
+
+
+---
+
+It identifies that Phase 6 was not completed.
+
+![](../assets/first_prompt_what_is_missing.png)
+
+The messier your project is, the more useless files it reads and wastes your credits for nothing.
+
+In addition, it increases the chances of hallucinations.
+
+---
+
+It proposes various options, we will do Phase 6 implementation
+
+![](../assets/first_prompt_options.png)
+
+Eventually, it consumed about 20% of my 5-hour credits.
+
+## Phase 6 Plan
+
+In a previous prompt I simply asked to plan the 6th phase.
+
+I save the plan to be able to resume later.
+
+Let's analyze this plan together.
+
+[Phase 6 plan](https://github.com/AlbanOtt/chemometrics_vibe_coding/blob/a25bf12d39c18d10b0c62668cca1457ef13f128e/data/CD-MRG-metabolomics_summerschool_2023/plan_phase6.md)
+
+## Implement the Plan
+
+I switched to Sonnet 4.5 to save credits.
+
+> I planned in a previous session, now I want to implement the \@data/CD-MRG-metabolomics_summerschool_2023/plan_phase6.md plan
+
+![](../assets/first_prompt_implementing.png)
+
+---
+
+It runs the code by itself and detects an error.
+
+![](../assets/first_prompt_implementing_error.png)
+
+Then it fixes the error by itself.
+
+![](../assets/first_prompt_implementing_fix.png)
+
+---
+
+Finalize the implementation.
+
+![](../assets/first_prompt_implementing_finish.png)
+
+---
+
+It didn't implement the quarto notebook, we ask it.
+
+> You didn't create the quarto file for this analysis !
+
+![](../assets/first_prompt_implementing_finish_quarto.png)
+
+## Let's Look at the Report
+
+[Report](../reports/_book/index.html)
+
+Now we saw how Claude behaves when we send simple prompts.
+What did we do in anticipation to reach such a behavior?
+
+## Summary
+
+- Always plan before implementing.
+- CAREFULLY read the plan, or you will waste credits and time.
+- Run the implementation.
+- Review `.py` and `.qmd` files not for errors but for sabotage.
+
+::: {.callout-note}
+I should be there max 1h30 after the start, meaning before 11:00.
+:::
+
+
+# 4. Prepare a Vibe Coding Environment {background-color="#2c5282"}
+
+## Overview
+
+- `CLAUDE.md` lists what it should always know about the project
+- Skills
+ - `quarto-authoring` Full documentation on Quarto, by Mickaël Canouil
+ - `chemometrics-ms-metabolomics` based on Boccard & Rudaz 2018 - Extracting Knowledge from MS Clinical Metabolomic Data
+ - `skill creator` a skill to create skill, by Anthropic.
+
+## What Is CLAUDE.md?
+
+A markdown file in your project root that Claude Code reads automatically.
+
+It provides:
+
+- **Project context** (what are we analyzing?)
+- **Data structure** (where are files? what format?)
+- **Requirements** (how to split data? what metrics?)
+- **Conventions** (code style, output locations)
+- **Constraints** (what NOT to do)
+
+::: {.fragment}
+Think of it as **project instructions for your AI collaborator**.
+:::
+
+## CLAUDE.md Structure {.smaller}
+
+```markdown
+# [Project Title]
+
+## Aim of this repository
+[What is the purpose? What problem does it solve?]
+
+### Principles
+- [Key principle 1]
+- [Key principle 2]
+
+## Core Development Rules
+
+1. Package Management
+   - [Tools and restrictions]
+
+2. Code Quality
+   - [Type hints, style, conventions]
+
+3. Testing Requirements
+   - [Framework and coverage expectations]
+
+## Commit messages
+[Convention style: conventional commits, etc.]
+
+## Quarto Authoring Guidelines
+[If applicable: tables, figures, interactive plots]
+
+## Code Formatting
+[Linting tools, line length, pre-commit rules]
+
+## Error Resolution
+[Fix order, debugging strategy]
+```
+The [CLAUDE.md](https://github.com/AlbanOtt/chemometrics_vibe_coding/blob/1cfc052b8a3ce524c454feac0f21d009d6080c4c/CLAUDE.md) I wrote for this workshop.
+
+Rule of thumb: Are these information ALWAYS needed regardless the context? if not, consider skills or agents.
+The more you write in CLAUDE.md, the more credits are used.
+
+## Let's Write One Together! 🖊️ {.smaller}
+
+**Project:** LC-MS metabolomics analysis for drug monitoring
+
+::: {.fragment}
+```markdown
+# Drug Detection in Skin Metabolomics
+
+## Aim of This Repository
+Analyze LC-MS metabolomics data to detect diphenhydramine and its metabolites in plasma and skin samples collected over 24 hours.
+
+### Principles
+- Follow metabolomics best practices (Boccard & Rudaz, 2018)
+- Ensure reproducibility with comprehensive preprocessing documentation
+- Enrich statistical significance with biological interpretation
+
+## Tools
+- Use Python for the code
+- You may use R as a last resort
+- Quarto notebook
+```
+:::
+
+---
+
+These instructions, I provided them in the initial [prompt](https://github.com/AlbanOtt/chemometrics_vibe_coding/blob/feat/final_repos_state/data/CD-MRG-metabolomics_summerschool_2023/prompt.md) because I wanted to have a user experience like:
+- drop your files in "./data"
+- write a prompt specific to your use-case and run it
+- How can we actually reach this?
+
+---
+
+::: {.callout-warning}
+I have not tested these tips yet
+:::
+
+``` markdown
+## Context
+
+Currently, this repository is optimized for vibe coding with some predefined skills to help.
+We expect the user to provide you some data in `./data`, tell you the structure, the context of the analysis and the questions it wants to ask.
+As soon as you have all these information, start by suggesting:
+- a `CLAUDE.md` edition where this paragraph is removed and replaced by:
+- The context of the data
+- The data structure
+- The main questions and objectives of their analysis.
+   - This section should be a checklist regularly updated based on analysis you already did `- [x]`  and new scientific questions `- [ ]`.
+   - Feel free to challenge and propose rephrasing of scientific questions
+   - Feel free to suggest scientific questions based on context and avaialble data.
+```
+
+It bootstraps the project context, then instructs Claude to replace it with real project details.
+
+## Adding Data Structure
+
+```markdown
+## Data Structure
+
+- `data/preprocessing_result.pkl`: Preprocessed metabolomics data
+  - Keys: `forearm`, `forehead` (sample locations)
+  - Each contains: `X_processed`, `metadata`, `feature_metadata`,
+    `peak_areas_raw`, `feature_ids`
+  - Features: m/z values (ppm tolerance: ±5 ppm)
+  - Timepoints: 0, 1, 2, 4, 8, 12, 24 hours post-dose
+
+- `data/GNPS_results/`: Compound annotation databases
+  - GNPS library matches with m/z and retention time
+
+- Outputs: Quarto reports in `reports/`, figures in `_book/`
+```
+
+## Adding Common Pitfalls
+
+```markdown
+## Common Pitfalls to Avoid
+
+❌ DO NOT use blank subtraction without careful review
+❌ DO NOT use autoscaling (use PQN normalization instead)
+❌ DO NOT fit preprocessing on full dataset before analysis
+❌ DO NOT ignore mass accuracy and retention time variation
+❌ DO NOT rely on statistical significance alone (check biological relevance)
+❌ DO NOT report false compounds (verify with GNPS MS/MS data)
+
+✅ Always document feature matching tolerance criteria
+✅ Always check multivariate model diagnostics
+✅ Always generate dummy datasets with known, controlled effects as a safeguard
+```
+
+::: {.callout-caution}
+I haven't tested this already: `✅ Always generate dummy datasets with known, controlled effects as a safeguard.`
+
+If you intend to provide such a repository to biologists who can't review code on their own, this should serve as a safety net. However, it shouldn't be just one sentence; it needs to be a set of skills supported by an agent.
+:::
+
+
+## 🎯 Check Your Understanding: CLAUDE.md {.smaller .flashcards showFlipButton=true}
+
+::: {.flashcard-front}
+Where should each of these go: 
+
+a. Use random_state=42 for all splits
+b. For NIR data, use SNV before PLS
+c. Data is in \`data/corn_moisture.csv\`?
+d. What are the best method to compare 2 unsynchronized time series?
+:::
+
+::: {.flashcard-back}
+a. **CLAUDE.md** - Project-specific requirement (your reproducibility standard for THIS project)
+b. **SKILL** - Reusable domain knowledge (applies to ANY NIR project)
+c. **CLAUDE.md** - Project-specific data location (unique to THIS project)
+d. **Prompt** - It is a question at given moment, not something you will reuse (one shot)
+
+**Rule:** CLAUDE.md = "what and where for MY project", Skills = "how and why for ANY similar project"
+:::
+
+::: {.callout-note}
+I should be there max 2h00 after the start, meaning before 11:30.
+
+Pause - 15min
+:::
+
+# 5. Understanding Skills (SKILL.md) {background-color="#2c5282"}
+
+## What Are Skills? {.smaller}
+
+**Skills = Reusable domain expertise modules**
+
+- CLAUDE.md is **project-specific**
+- SKILL.md is **reusable across projects**
+
+::: {.columns}
+::: {.fragment}
+::: {.column width="50%"}
+Think of skills as:
+
+- Expert knowledge encoded in markdown
+- Best practices documentation
+- Decision frameworks
+- Code templates and examples
+- How to perform a **task** not a workflow, that would be agents.
+:::
+::: {.column width="50%"}
+![](../assets/bad_knowledge_management.png){width=60%}
+![](../assets/good_knowledge_management.png){width=60%}
+:::
+:::
+:::
+
+## SKILL.md Structure
+
+```yaml
+---
+name: your-skill-name
+description: Brief description of what this Skill does and when to use it
+---
+
+# Your Skill Name
+
+## Instructions
+[Clear, step-by-step guidance for Claude to follow]
+
+## Examples
+[Concrete examples of using this Skill]
+```
+
+---
+
+```yaml
+---
+name: skill-name
+description: Brief description of what this Skill does and when to use it
+---
+```
+
+The key features here are:
+
+- **name**: Eventually, you will invoke with `/skill-name` (or be automatically invoke). Make it handy.
+   - Antipattern: choose-methodology-for-machine-learning-in-lcms-context
+- **description**: claude knows this description, it uses it to decide to invoke the skill or not. "should include both what the Skill does and when Claude should use it."
+
+---
+
+> Only add context Claude doesn't already have. Challenge each piece of information:
+>
+>- "Does Claude really need this explanation?"
+>- "Can I assume Claude knows this?"
+>- "Does this paragraph justify its token cost?"
+
+In other words: introduce skills either when you want to enforce a behaviour or that Claude failed you previously.
+
+
+::: {.footer}
+source: [https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)
+:::
+
+---
+
+**Good example: Concise** (approximately 50 tokens):
+```` markdown
+## Extract PDF text 
+
+Use pdfplumber for text extraction:
+
+```python
+import pdfplumber 
+   with pdfplumber.open("file.pdf") as pdf: 
+      text = pdf.pages[0].extract_text()
+```
+```` 
+**Bad example: Too verbose** (approximately 150 tokens):
+```` markdown
+## Extract PDF text 
+
+PDF (Portable Document Format) files are a common file format that contains text, 
+images, and other content. To extract text from a PDF, you'll need to use a library. 
+There are many libraries available for PDF processing, but we recommend pdfplumber 
+because it's easy to use and handles most cases well. First, you'll need to install 
+it using pip. Then you can use the code below...
+````
+
+::: {.footer}
+source: [https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)
+:::
+
+
+## Control Autonomy (Degree of Freedom)
+
+```` markdown
+---
+name: chemometrics-ml-selection
+description: Choose the proper normalization method for LC-MS.
+---
+# Normalization method for LCMS
+## High level of freedom
+Choose one of: TSN, MSTUS, PQN, LOESS, QC-RSC, QC-SVRC
+## Medium freedom
+Prefer PQN in most situations.
+## Low freedom
+Use PQN function to normalize
+``` python
+def pqn_normalize(X: np.ndarray, reference: np.ndarray | None = None) -> np.ndarray:
+    quotients = X / reference
+    norm_factors = np.nanmedian(quotients, axis=1, keepdims=True)
+    return X / norm_factors
+```
+````
+
+## Read the End of Doc First
+
+The Claude Skill [documentation](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices#checklist-for-effective-skills) ends with a checklist.
+
+You can consider it the short version of the documentation, but in any case, it is always better to read it thoroughly.
+
+## How Claude Code Uses Skills
+
+When you invoke a skill:
+
+1. **Claude Code reads the SKILL.md file**
+2. **Incorporates guidance into its context**
+3. **Applies best practices automatically**
+
+Force loading of the skill
+```bash
+# In Claude Code
+> /chemometrics-ml-selection
+```
+
+Claude will invoke the skill if it considers it useful in the context
+```bash
+# In Claude Code
+> Carefully choose the best ML method
+```
+
+## Publicly Available Skills {.smaller}
+
+::: {.callout-important}
+Skills can contain scripts and Claude instructions to run commands.  
+**ALWAYS** read the content carefully. This is quite a cybersecurity nightmare.
+:::
+
+#### Anthropic Public Skills
+
+This is the safest source:  
+[https://github.com/anthropics/skills/tree/main/skills](https://github.com/anthropics/skills/tree/main/skills)
+
+#### Posit (aka RStudio)
+
+I both well know Mickaël's and Posit:  
+[https://github.com/posit-dev/skills](https://github.com/posit-dev/skills)
+
+#### K-Dense-AI
+
+I don't know this company, be careful, I found no issue in the skills I read:  
+[https://github.com/K-Dense-AI/claude-scientific-skills](https://github.com/K-Dense-AI/claude-scientific-skills)
+
+#### Other sources
+
+Be very, very cautious.
+
+## The Skill to Create Skills
+
+The community **highly** recommend to use [/skill-creator](https://github.com/anthropics/skills/blob/main/skills/skill-creator/SKILL.md) when you try to build your own skill.
+
+#### Build Skill on Top of Scientific Papers
+
+Find a methodology paper you like and agree with like [Boccard & Rudaz 2018 - Extracting Knowledge from MS Clinical Metabolomic Data:
+Processing and Analysis Strategies](https://pubmed.ncbi.nlm.nih.gov/39354326/).
+
+In claude:
+``` bash
+Here is a very interesting paper @assets/boccard2018.pdf with a full methodology 
+on Metabolomic data analysis. Build a skill with /skill-creator based on this
+scientific paper.
+```
+
+Result here:
+[Skill](https://github.com/AlbanOtt/chemometrics_vibe_coding/blob/1cfc052b8a3ce524c454feac0f21d009d6080c4c/.claude/skills/chemometrics-ms-metabolomics/SKILL.md) based on Boccard & Rudaz, 2018
+
+---
+
+Nice, isn't it?
+
+Can you identify any caveats?
+
+::: {.fragment}
+Claude didn't stick to the paper, it incorporated its own knowledge for the best and the worst.
+
+#### The best
+
+- It sticks to the original paper quite well
+- Low efforts
+:::
+
+---
+
+#### The worst
+
+- We don't care about [references](https://github.com/AlbanOtt/chemometrics_vibe_coding/blob/2c833e601147947a098fa981dd3409e274f16a2f/.claude/skills/chemometrics-ms-metabolomics/SKILL.md#references) in the skill, it's a waste of token. Initial prompt should be improved. 
+- Very low degree of freedom for the [multivariate analysis](https://github.com/AlbanOtt/chemometrics_vibe_coding/blob/2c833e601147947a098fa981dd3409e274f16a2f/.claude/skills/chemometrics-ms-metabolomics/references/multivariate-analysis.md). In the whole skill in general. I should improve my prompt.
+
+- Boccard & Rudaz are very vague about missing values, still the skill has a [list of method](https://github.com/AlbanOtt/chemometrics_vibe_coding/blob/2c833e601147947a098fa981dd3409e274f16a2f/.claude/skills/chemometrics-ms-metabolomics/references/normalization.md#missing-value-handling), not what I would recommend. 
+
+
+I would recommend to read carefully then perform a sanity check with a prompt like
+``` bash
+A new paper @path/to/paper just came out on metabolomics statistical analysis. 
+Please confront it to my skill /chemometrics-ms-metabolomics.
+Create a quarto notebook with the differences you spot.
+```
+
+## Build Skill on Top of Scientific Papers
+
+*Now that we've seen some caveats, what would you do?*
+
+::: {.fragment}
+- Read the paper and compare it with existing skills.
+- Write a Quarto report highlighting the main differences.
+- Plan updates to the skills.
+- Implement the updates.
+- Perform a sanity check against all papers that historically contributed to the skill.
+- Write a Quarto report on what has been left out or considered obsolete.
+:::
+
+::: {.fragment}
+*What have we just done?*
+:::
+::: {.fragment}
+We have just designed a workflow—that is, a subagent.
+:::
+
+## Do ✅
+
+- Start with the official skills from Anthropic - they're battle-tested and well-documented
+- Keep your skill collection lean - only enable what you actually need for your current work
+- Write clear SKILL.md files with concrete examples showing Claude exactly how to use your skills
+- Test new skills on small tasks first before relying on them for complex workflows
+- Review skill usage in Claude Code's output to verify they're being applied correctly
+
+## Don't 💣
+
+- Download skills from untrusted sources without reviewing their contents first
+- Load too many skills at once - each one consumes tokens and slows down execution
+- Skip reading the SKILL.md documentation - Claude needs to view it to use skills properly
+- Create overly broad skills that try to handle multiple unrelated tasks - keep them focused
+- Assume skills are "free" - they consume context on every task, even when not actively used
+
+## Skills vs CLAUDE.md
+
+| Aspect | CLAUDE.md | SKILL.md |
+|--------|-----------|----------|
+| **Scope** | One project | Reusable |
+| **Content** | Project specifics | Domain expertise |
+| **Location** | Project root | Skills folder |
+| **Examples** | "My data is in data/" | "For NIR, use SNV" |
+| **Who writes** | You, for your project | You or community |
+
+::: {.fragment}
+**Use together:** CLAUDE.md = what + where, SKILL.md = how + why
+:::
+
+
+## 🎯 Check Your Understanding: Skills {.smaller .flashcards showFlipButton=true}
+
+::: {.flashcard-front}
+Can multiple skills be relevant to a single task?
+:::
+
+::: {.flashcard-back}
+Yes — Claude should not limit itself to one skill.
+:::
+
+## 🎯 Check Your Understanding: Skills 2 {.smaller .flashcards showFlipButton=true}
+
+::: {.flashcard-front}
+Why should a SKILL.md be concise?
+:::
+
+::: {.flashcard-back}
+The context window is a shared resource. Once Claude loads a SKILL.md, every token competes with conversation history, other Skills, and the user's request. Only add context Claude doesn't already have.
+:::
+
+## 🎯 Check Your Understanding: Skills 3 {.smaller .flashcards showFlipButton=true}
+
+::: {.flashcard-front}
+What are the three levels of freedom you can set in a Skill?
+:::
+
+::: {.flashcard-back}
+High freedom — text-based guidelines when multiple approaches are valid.
+
+Medium freedom — pseudocode/scripts with parameters when a preferred pattern exists.
+
+Low freedom — specific scripts with no parameters when operations are fragile and consistency is critical.
+:::
+
+::: {.callout-note}
+I should be there max 2h30 after the start, meaning before 12:00.
+:::
+
+# 6. Claude Code Usage and Cybersecurity {background-color="#2c5282"}
+
+## What Does Claude Code Actually Access? {.smaller}
+
+Claude Code operates **on your machine** with your permissions:
+
+- It reads and writes files in your project directory
+- It runs shell commands (git, python, npm, etc.)
+- It can access environment variables, SSH keys, credentials
+- It can install packages, modify configs, run scripts
+- It accesses the network (API calls, git push, package downloads)
+
+::: {.callout-warning}
+Claude Code is NOT sandboxed by default. It acts with **your user permissions**.
+:::
+
+## The Risk Model {.smaller}
+
+::: {.columns}
+::: {.column width="45%"}
+### Direct Risks
+
+- **Data exfiltration**: Sensitive data sent to unintended endpoints
+- **Credential exposure**: API keys, tokens in generated code or logs
+- **Malicious dependencies**: Compromised packages installed via `uv add` or `npm install`
+- **Prompt injection**: Malicious content in files or skill definitions triggering unintended actions
+:::
+::: {.column width="10%"}
+:::
+::: {.column width="45%"}
+### Indirect Risks
+
+- **Supply chain**: Third-party skills or MCP servers with hidden instructions
+- **Overprivileged access**: Running on a machine with production credentials
+- **Data leakage**: Proprietary code/data sent to the model API
+- **Lateral movement**: If your machine has network access to production systems
+:::
+:::
+
+## Recommendation: Disposable Cloud Environment {.smaller}
+
+**Do NOT run Claude Code on your production workstation with real data.**
+
+Instead, set up a **disposable cloud VM**:
+
+| Aspect | Recommendation |
+|--------|---------------|
+| **Environment** | Cloud VM (GCP, AWS, Azure) that can be destroyed and recreated |
+| **Data** | Work on **copies** of real data, never originals |
+| **Account** | Minimum access rights — no admin, no production credentials |
+| **Network** | Restrict outbound access to only what's necessary |
+| **Secrets** | No SSH keys, API tokens, or credentials beyond what the task needs |
+| **Lifecycle** | Trash the VM after the session; rebuild fresh for the next one |
+
+::: {.fragment}
+Think of it as a **clean room** for AI-assisted development.
+:::
+
+## Permission Modes in Claude Code {.smaller}
+
+Claude Code has built-in permission controls. Use them:
+
+- **Default mode**: Claude asks permission before every file edit and command
+- **Allowlist**: Pre-approve specific commands (e.g., `uv run pytest`) while blocking others
+- Review each tool call — especially `Bash` commands
+
+::: {.callout-tip}
+Even with permission controls, a disposable environment remains the safest approach. Defense in depth: trust the tool controls **and** limit the blast radius.
+:::
+
+## Third-Party Skills and MCP Servers {.smaller}
+
+Skills and MCP servers are **code that Claude executes on your behalf**.
+
+- **Always read** the full content of any skill before installing
+- Prefer skills from **trusted sources** (Anthropic, known organizations)
+- MCP servers can make **API calls** — verify what endpoints they contact
+- A malicious skill could instruct Claude to exfiltrate data, install backdoors, or modify your code subtly
+
+::: {.callout-important}
+Treat skill installation like installing software: review it, understand it, trust the source.
+:::
+
+## Summary: Cybersecurity Checklist {.smaller}
+
+- [ ] Use a **disposable cloud VM**, not your workstation
+- [ ] Work on **copies** of data, never originals
+- [ ] Use an account with **minimum access rights**
+- [ ] **Review** every third-party skill and MCP server before use
+- [ ] Keep **no secrets** (SSH keys, tokens) on the VM beyond what's needed
+- [ ] **Destroy** the environment after the session
+- [ ] Use Claude Code's **permission controls** as an additional layer
+- [ ] Stay informed about Claude Code's **privacy settings** (`/privacy`)
+
+# Conclusion {background-color="#2c5282"}
+
+## Your Journey Forward
+
+- [ ] Write CLAUDE.md for your next project
+- [ ] Reuse skills on the web, identify bottleneck
+- [ ] Create your own skills
+- [ ] Identify your workflow, implement agents
+- [ ] Share with your team/community
+- [ ] Iterate and improve
+
+## Thank You!
+
+**Contact:**
+
+- GitHub: [AlbanOtt](https://github.com/AlbanOtt)
+- LinkedIn: [Alban Ott](https://www.linkedin.com/in/alban-ott-25222396/)
+
+**Workshop materials:**
+
+[https://github.com/AlbanOtt/chemometrics_vibe_coding](https://github.com/AlbanOtt/chemometrics_vibe_coding)
+

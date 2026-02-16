@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(where:*)"
+    ]
+  },
+  "enabledPlugins": {
+    "beads@beads-marketplace": true
+  }
+}

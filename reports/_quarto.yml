@@ -1,0 +1,27 @@
+project:
+  type: book
+
+book:
+  title: "Metabolomics Analysis Tutorial"
+  subtitle: "LC-MS Diphenhydramine Pharmacokinetics in Skin and Plasma"
+  author: "Alban Ott (Claude Code CLI)"
+  date: today
+  image: opengraph.png
+  page-navigation: true
+
+  chapters:
+    - index.qmd
+    - preprocessing_tutorial.qmd
+    - eda_tutorial.qmd
+    - drug_detection_tutorial.qmd
+    - multivariate_tutorial.qmd
+    - biomarkers_tutorial.qmd
+    - location_comparison_tutorial.qmd
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    code-fold: false
+    number-sections: true

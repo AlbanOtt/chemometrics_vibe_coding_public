@@ -1,0 +1,180 @@
+/*-- scss:defaults --*/
+
+// Colors
+$primary-color: #2c5282;
+$secondary-color: #87CEEB;
+$accent-color: #FFD700;
+$success-color: #90EE90;
+$warning-color: #FFA07A;
+$danger-color: #FFB6C6;
+
+// Fonts
+$font-family-sans-serif: "Helvetica Neue", Helvetica, Arial, sans-serif;
+$presentation-heading-font: "Helvetica Neue", sans-serif;
+$code-font: "Fira Code", "Source Code Pro", monospace;
+
+// Spacing
+$presentation-block-margin: 20px;
+
+/*-- scss:rules --*/
+
+// Title slide customization
+.reveal .title {
+  color: $primary-color;
+  font-weight: bold;
+}
+
+.reveal .subtitle {
+  color: $secondary-color;
+  font-style: italic;
+}
+
+// Section headers with colored backgrounds
+.reveal h1 {
+  color: white;
+  text-transform: uppercase;
+  font-weight: bold;
+  letter-spacing: 2px;
+}
+
+// Content headers
+.reveal h2 {
+  color: $primary-color;
+  border-bottom: 3px solid $secondary-color;
+  padding-bottom: 10px;
+}
+
+// Code blocks
+.reveal pre {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border-left: 4px solid $accent-color;
+  font-size: 0.7em;
+}
+
+.reveal code {
+  font-family: $code-font;
+  color: #2c3e50;
+}
+
+// Callout boxes
+.definition {
+  background-color: lighten($secondary-color, 35%);
+  border-left: 5px solid $secondary-color;
+  padding: 15px;
+  margin: 20px 0;
+  border-radius: 5px;
+}
+
+// Lists
+.reveal ul, .reveal ol {
+  margin-left: 1em;
+}
+
+.reveal li {
+  margin-bottom: 0.5em;
+}
+
+// Checkmarks and crosses
+.reveal li::marker {
+  font-weight: bold;
+}
+
+// Fragments (incremental reveal)
+.reveal .fragment.highlight-current-blue {
+  opacity: 1;
+}
+
+.reveal .fragment.highlight-current-blue.current-fragment {
+  color: $primary-color;
+  font-weight: bold;
+}
+
+// Tables
+.reveal table {
+  border-collapse: collapse;
+  margin: 20px auto;
+}
+
+.reveal th {
+  background-color: $primary-color;
+  color: white;
+  padding: 10px;
+  font-weight: bold;
+}
+
+.reveal td {
+  padding: 8px;
+  border-bottom: 1px solid #ddd;
+}
+
+// Two-column layouts
+.columns {
+  display: flex;
+  gap: 20px;
+}
+
+.column {
+  flex: 1;
+}
+
+// Center content
+.center {
+  text-align: center;
+}
+
+// Smaller text for backup slides
+.smaller {
+  font-size: 0.8em;
+}
+
+
+
+// Fit text to slide
+.r-fit-text {
+  font-size: clamp(1rem, 5vw, 3rem);
+}
+
+// Footer styling
+.reveal .footer {
+  color: #666;
+  font-size: 0.6em;
+}
+
+// Mermaid diagrams
+.mermaid {
+  background-color: white;
+  padding: 10px;
+  border-radius: 5px;
+}
+
+// Flashcard styling
+.flashcard-front {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 40px;
+  border-radius: 15px;
+  font-size: 1.3em;
+  font-weight: bold;
+  text-align: center;
+  margin: 20px 0;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  min-height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flashcard-back {
+  background-color: lighten($success-color, 20%);
+  border-left: 5px solid $success-color;
+  padding: 30px;
+  border-radius: 10px;
+  font-size: 1em;
+  margin: 20px 0;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  line-height: 1.6;
+}
+
+.flashcard-back strong {
+  color: $primary-color;
+}

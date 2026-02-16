@@ -1,0 +1,4 @@
+
+# Use bd merge for beads JSONL files
+.beads/issues.jsonl merge=beads
+# Note: HTML files are now deployed via GitHub Pages, not committed

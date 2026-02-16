@@ -1,0 +1,335 @@
+---
+title: "Sampling Location Comparison"
+subtitle: "Forearm vs forehead for non-invasive drug monitoring in LC-MS metabolomics"
+author: "Alban Ott (Claude Code CLI)"
+date: "2026/02/10"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: false
+    number-sections: true
+    self-contained: true
+execute:
+  warning: false
+---
+
+## Learning Objectives
+
+::: {.callout-note}
+## What you will learn
+
+- Match features across independent GNPS datasets using m/z and retention time tolerance windows
+- Quantify the feature overlap between two sampling locations (forearm vs forehead)
+- Compare targeted drug detection (diphenhydramine and metabolites) at each body site
+- Evaluate pharmacokinetic parameter consistency across sampling locations
+- Assess PLS-DA classification performance for drug effect monitoring at each site
+- Generate a data-driven recommendation for the optimal sampling location
+:::
+
+## Background
+
+In dermal pharmacokinetics, the choice of skin sampling location can significantly affect
+the quality and sensitivity of non-invasive drug monitoring. Different body sites vary in:
+
+- **Skin thickness and permeability** — the forearm has thinner stratum corneum than the
+  forehead, potentially affecting drug diffusion rates
+- **Blood perfusion** — the forehead has higher capillary density, which may lead to
+  faster drug appearance but also faster clearance
+- **Sebaceous gland density** — the forehead has more sebaceous glands, contributing
+  additional lipophilic compounds to the skin surface metabolome
+
+This analysis compares the forearm and forehead as sampling sites for monitoring
+diphenhydramine pharmacokinetics using LC-MS metabolomics. Because the two datasets were
+processed through separate GNPS runs, feature IDs are unrelated between datasets. We must
+match features across locations using m/z and retention time within tolerance windows
+before any comparison is meaningful.
+
+**Key matching parameters:**
+
+- **m/z tolerance**: 10 ppm — standard for high-resolution mass spectrometry
+- **RT tolerance**: 0.5 min — accounts for chromatographic variability between runs
+
+## Setup
+
+```{python}
+#| label: setup
+import logging
+import pickle
+import sys
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+from itables import show
+
+# Add project root to path for imports
+project_root = Path.cwd().parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+from src.drug_detection import TARGET_COMPOUNDS
+from src.location_comparison import (
+    compare_drug_detection,
+    compare_pk_parameters,
+    compare_plsda_performance,
+    compute_feature_overlap,
+    generate_recommendation,
+    plot_detection_comparison,
+    plot_feature_overlap,
+    plot_model_comparison,
+    plot_pk_comparison_locations,
+    plot_recommendation_summary,
+)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(name)s — %(message)s")
+
+# Plot style
+sns.set_theme(style="whitegrid", palette="colorblind")
+plt.rcParams["figure.dpi"] = 120
+```
+
+## Data Loading
+
+```{python}
+#| label: load-data
+# Load preprocessed data from Phase 2
+pickle_path = project_root / "data" / "preprocessing_result.pkl"
+with open(pickle_path, "rb") as f:
+    result = pickle.load(f)
+
+# Extract datasets for both sampling sites
+feat_forearm = result["forearm"]["feature_metadata"]
+feat_forehead = result["forehead"]["feature_metadata"]
+raw_forearm = result["forearm"]["peak_areas_raw"]
+raw_forehead = result["forehead"]["peak_areas_raw"]
+meta_forearm = result["forearm"]["metadata"]
+meta_forehead = result["forehead"]["metadata"]
+X_forearm = result["forearm"]["X_processed"]
+X_forehead = result["forehead"]["X_processed"]
+feat_ids_forearm = result["forearm"]["feature_ids"]
+feat_ids_forehead = result["forehead"]["feature_ids"]
+
+print(f"Forearm:  {len(feat_forearm)} features, {len(meta_forearm)} samples")
+print(f"Forehead: {len(feat_forehead)} features, {len(meta_forehead)} samples")
+print(f"\nForearm shapes:  X={X_forearm.shape}, raw={raw_forearm.shape}")
+print(f"Forehead shapes: X={X_forehead.shape}, raw={raw_forehead.shape}")
+```
+
+## Feature Overlap Analysis
+
+The two datasets come from separate GNPS runs, so feature IDs (row numbers) are
+completely unrelated. To determine how many chemical features are shared between
+locations, we match by m/z within 10 ppm **and** retention time within 0.5 minutes.
+
+```{python}
+#| label: feature-overlap
+overlap = compute_feature_overlap(feat_forearm, feat_forehead)
+
+print(f"Forearm features:  {overlap['n_a']}")
+print(f"Forehead features: {overlap['n_b']}")
+print(f"\nMatched from forearm:  {overlap['n_matched_a']} ({overlap['overlap_fraction_a']:.1%})")
+print(f"Matched from forehead: {overlap['n_matched_b']} ({overlap['overlap_fraction_b']:.1%})")
+print(f"\nUnique to forearm:  {overlap['n_unique_a']}")
+print(f"Unique to forehead: {overlap['n_unique_b']}")
+```
+
+```{python}
+#| label: fig-feature-overlap
+#| fig-cap: "Feature overlap between forearm and forehead sampling locations. 'Shared' features are those matched by m/z (±10 ppm) and RT (±0.5 min)."
+fig, ax = plt.subplots(figsize=(8, 4))
+plot_feature_overlap(overlap, ax=ax)
+plt.tight_layout()
+plt.show()
+```
+
+::: {.callout-tip}
+## Interpreting feature overlap
+
+A moderate overlap (30-70%) is typical when comparing two body sites processed in
+separate GNPS runs. Features unique to one location may represent site-specific
+metabolites (e.g., sebum lipids on forehead) or features near detection limits that
+were only picked up in one run. The shared features form the basis for meaningful
+cross-location comparisons.
+:::
+
+## Drug Detection Comparison
+
+We search for diphenhydramine and its metabolites in both datasets, comparing
+detection success and signal intensity at each body site.
+
+```{python}
+#| label: drug-detection
+detection_df = compare_drug_detection(
+    feat_forearm,
+    feat_forehead,
+    raw_forearm,
+    raw_forehead,
+    meta_forearm,
+    meta_forehead,
+    TARGET_COMPOUNDS,
+)
+show(detection_df, paging=False, searching=False, info=False, ordering=False)
+```
+
+```{python}
+#| label: fig-detection-comparison
+#| fig-cap: "Comparison of mean skin intensity for target compounds at each sampling location. 'ND' indicates the compound was not detected."
+fig, ax = plt.subplots(figsize=(10, 5))
+plot_detection_comparison(detection_df, ax=ax)
+plt.tight_layout()
+plt.show()
+```
+
+::: {.callout-tip}
+## Detection quality matters
+
+Higher mean skin intensity suggests better sensitivity for non-invasive monitoring.
+However, detection of the parent compound (diphenhydramine) is more important than
+metabolites for clinical monitoring. A location that detects DPH with lower ppm error
+and higher intensity is preferred.
+:::
+
+## PK Parameter Comparison
+
+For the primary analyte (diphenhydramine), we extract pharmacokinetic curves at each
+location and compare plasma-skin correlations. Strong Cmax and AUC correlations between
+plasma and skin indicate that the skin site faithfully reflects systemic drug levels.
+
+```{python}
+#| label: pk-comparison
+pk_comp = compare_pk_parameters(
+    raw_forearm,
+    raw_forehead,
+    meta_forearm,
+    meta_forehead,
+    feat_forearm,
+    feat_forehead,
+    target_mz=TARGET_COMPOUNDS["Diphenhydramine"],
+)
+
+show(pk_comp["summary"], paging=False, searching=False, info=False, ordering=False)
+```
+
+```{python}
+#| label: fig-pk-comparison
+#| fig-cap: "Pharmacokinetic curves for diphenhydramine at forearm (left) and forehead (right). Each line represents one subject, with plasma (solid) and skin (dashed) sample types."
+fig = plot_pk_comparison_locations(pk_comp, compound_name="Diphenhydramine")
+plt.show()
+```
+
+::: {.callout-warning}
+## Small sample size caveat
+
+With only a few subjects, Spearman correlations have limited statistical power.
+The correlation values should be interpreted as trends rather than definitive evidence.
+A larger study would be needed to confirm these findings.
+:::
+
+## Model Performance Comparison
+
+We fit PLS-DA models on skin-only samples at each location, classifying early vs late
+timepoints (threshold: 60 min post-dose). A higher cross-validated Q² indicates better
+predictive ability for distinguishing drug effect phases.
+
+```{python}
+#| label: plsda-setup
+# Filter to skin-only samples
+skin_mask_fa = meta_forearm["sample_type"].values == "skin"
+skin_mask_fh = meta_forehead["sample_type"].values == "skin"
+
+X_skin_fa = X_forearm[skin_mask_fa]
+X_skin_fh = X_forehead[skin_mask_fh]
+meta_skin_fa = meta_forearm[skin_mask_fa].reset_index(drop=True)
+meta_skin_fh = meta_forehead[skin_mask_fh].reset_index(drop=True)
+
+print(f"Forearm skin samples:  {X_skin_fa.shape[0]}")
+print(f"Forehead skin samples: {X_skin_fh.shape[0]}")
+```
+
+```{python}
+#| label: plsda-comparison
+plsda_comp = compare_plsda_performance(
+    X_skin_fa,
+    X_skin_fh,
+    meta_skin_fa,
+    meta_skin_fh,
+    time_threshold=60.0,
+    n_components=2,
+    cv=5,
+)
+
+show(plsda_comp["summary"], paging=False, searching=False, info=False, ordering=False)
+```
+
+```{python}
+#| label: fig-model-comparison
+#| fig-cap: "PLS-DA model comparison. Left: R²Y (training fit) and Q² (cross-validated predictive ability) for each location. Center and right: score plots showing class separation."
+fig = plot_model_comparison(plsda_comp)
+plt.show()
+```
+
+::: {.callout-warning}
+## Overfitting risk
+
+With few skin samples per location, PLS-DA models are prone to overfitting. A large
+gap between R²Y and Q² is a warning sign. Permutation testing (see Phase 5) can
+help assess whether the observed Q² is significantly better than chance.
+:::
+
+## Location Recommendation
+
+We combine four criteria — feature coverage, drug detection quality, PK
+plasma-skin correlation, and PLS-DA Q² — into a composite scorecard to recommend the
+optimal sampling location.
+
+```{python}
+#| label: recommendation
+rec = generate_recommendation(overlap, detection_df, pk_comp, plsda_comp)
+
+print(f"Recommended location: {rec['recommended'].upper()}")
+print(f"\nRationale: {rec['rationale']}")
+print(f"\nDetailed scores:")
+show(rec["scores"], paging=False, searching=False, info=False, ordering=False)
+```
+
+```{python}
+#| label: fig-recommendation
+#| fig-cap: "Scorecard comparing forearm and forehead across four criteria. Green cells indicate the winning location for each criterion."
+fig, ax = plt.subplots(figsize=(10, 4))
+plot_recommendation_summary(rec, ax=ax)
+plt.tight_layout()
+plt.show()
+```
+
+## Summary
+
+::: {.callout-note}
+## Key findings
+
+- **Feature overlap** between forearm and forehead is moderate, reflecting both shared
+  systemic metabolites and site-specific compounds
+- **Diphenhydramine detection** may differ between locations in sensitivity and mass
+  accuracy
+- **PK correlations** between plasma and skin vary by site, indicating differences in
+  drug partitioning dynamics
+- **PLS-DA classification** of early vs late drug exposure timepoints may perform
+  differently at each location
+- The **composite recommendation** weighs all four criteria equally to suggest the
+  optimal monitoring site
+:::
+
+::: {.callout-tip}
+## Next steps
+
+- **Validate** the recommendation with an independent cohort
+- **Investigate** site-specific metabolites unique to each location
+- **Optimize** sampling protocols (e.g., tape-stripping depth, extraction solvent)
+  for the recommended location
+- **Extend** to other drug compounds and formulations
+- **Consider** practical factors (patient comfort, reproducibility) alongside
+  analytical performance
+:::

@@ -1,0 +1,457 @@
+---
+title: "Diphenhydramine Detection and Pharmacokinetic Analysis"
+subtitle: "Targeted compound search, PK curve extraction, and plasma-skin comparison in LC-MS metabolomics"
+author: "Alban Ott (Claude Code CLI)"
+date: "2026/02/09"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: false
+    number-sections: true
+    self-contained: true
+execute:
+  warning: false
+---
+
+## Learning Objectives
+
+::: {.callout-note}
+## What you will learn
+
+- Search for known compounds in untargeted metabolomics data using m/z tolerance matching
+- Extract pharmacokinetic (PK) curves from raw peak areas across subjects and timepoints
+- Calculate PK parameters (Cmax, Tmax, AUC) from concentration-time profiles
+- Compare drug pharmacokinetics between plasma and skin using Spearman correlation and time lag analysis
+:::
+
+## Background
+
+Diphenhydramine (DPH) is an antihistamine commonly used as a model compound in dermal
+pharmacokinetics studies. After oral administration, it is absorbed into plasma and
+subsequently distributed to skin, where it can be detected by non-invasive sampling
+methods.
+
+In LC-MS metabolomics, compounds are detected as **[M+H]+ ions** — the protonated
+molecular ion formed during electrospray ionization. The [M+H]+ mass is the neutral
+molecular mass plus 1.0073 Da (mass of a proton). For diphenhydramine (neutral mass
+255.1623), the [M+H]+ is 256.1696 Da.
+
+Key metabolites include:
+
+- **N-desmethyl-DPH** (242.1539 Da) — primary phase I metabolite via N-demethylation
+- **DPH N-oxide** (272.1645 Da) — N-oxidation product
+
+**Why raw peak areas for PK analysis?** Pareto-scaled data (used in EDA/PCA) is centered
+and scaled, which distorts absolute intensity relationships. PK parameters like Cmax and
+AUC require the original signal intensities to be meaningful.
+
+## Setup
+
+```{python}
+#| label: setup
+import logging
+import pickle
+import sys
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sns
+from itables import show
+
+# Add project root to path for imports
+project_root = Path.cwd().parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+from src.drug_detection import (
+    TARGET_COMPOUNDS,
+    compare_plasma_skin,
+    extract_pk_curves,
+    plot_compound_search_results,
+    plot_pk_comparison,
+    plot_pk_curves,
+    search_features_by_mz,
+    summarize_pk_all_subjects,
+)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(name)s — %(message)s")
+
+# Plot style
+sns.set_theme(style="whitegrid", palette="colorblind")
+plt.rcParams["figure.dpi"] = 120
+```
+
+```{python}
+#| label: load-data
+# Load preprocessed data from Phase 2
+pickle_path = project_root / "data" / "preprocessing_result.pkl"
+with open(pickle_path, "rb") as f:
+    result = pickle.load(f)
+
+# Extract datasets for both sampling sites
+feat_forearm = result["forearm"]["feature_metadata"]
+feat_forehead = result["forehead"]["feature_metadata"]
+raw_forearm = result["forearm"]["peak_areas_raw"]
+raw_forehead = result["forehead"]["peak_areas_raw"]
+meta_forearm = result["forearm"]["metadata"]
+meta_forehead = result["forehead"]["metadata"]
+
+print(f"Forearm:  {len(feat_forearm)} features, {len(meta_forearm)} samples")
+print(f"Forehead: {len(feat_forehead)} features, {len(meta_forehead)} samples")
+print(f"\nTarget compounds: {list(TARGET_COMPOUNDS.keys())}")
+print(f"Target m/z values: {list(TARGET_COMPOUNDS.values())}")
+```
+
+## Search for Drug Features
+
+We search both forearm and forehead datasets for features matching the [M+H]+ masses
+of diphenhydramine and its metabolites using a 10 ppm tolerance window — standard for
+high-resolution mass spectrometry.
+
+```{python}
+#| label: compound-search
+# Search for all target compounds in both datasets
+search_results = {}
+
+for compound, target_mz in TARGET_COMPOUNDS.items():
+    print(f"\n{'='*60}")
+    print(f"{compound} — target m/z: {target_mz:.4f}")
+    print(f"{'='*60}")
+
+    matches_forearm = search_features_by_mz(feat_forearm, target_mz)
+    matches_forehead = search_features_by_mz(feat_forehead, target_mz)
+
+    search_results[compound] = {
+        "target_mz": target_mz,
+        "forearm": matches_forearm,
+        "forehead": matches_forehead,
+    }
+
+    print(f"\n  Forearm matches: {len(matches_forearm)}")
+    if not matches_forearm.empty:
+        print(matches_forearm[["row m/z", "row retention time", "ppm_error"]].to_string())
+
+    print(f"\n  Forehead matches: {len(matches_forehead)}")
+    if not matches_forehead.empty:
+        print(matches_forehead[["row m/z", "row retention time", "ppm_error"]].to_string())
+```
+
+```{python}
+#| label: fig-compound-search
+#| fig-cap: "Feature search results for diphenhydramine and metabolites. Red stars mark features within the 10 ppm tolerance window."
+#| fig-subcap:
+#|   - "Diphenhydramine — forearm"
+#|   - "Diphenhydramine — forehead"
+#|   - "N-desmethyl-DPH — forearm"
+#|   - "N-desmethyl-DPH — forehead"
+#|   - "DPH N-oxide — forearm"
+#|   - "DPH N-oxide — forehead"
+
+# Create individual plots for each compound and site
+for compound, target_mz in TARGET_COMPOUNDS.items():
+    matches_forearm = search_results[compound]["forearm"]
+    matches_forehead = search_results[compound]["forehead"]
+
+    # Forearm plot
+    fig, ax = plt.subplots(figsize=(12, 6))
+    plot_compound_search_results(
+        feat_forearm, matches_forearm, target_mz,
+        compound_name=f"{compound} (forearm)", ax=ax,
+    )
+    plt.tight_layout()
+    plt.show()
+
+    # Forehead plot
+    fig, ax = plt.subplots(figsize=(12, 6))
+    plot_compound_search_results(
+        feat_forehead, matches_forehead, target_mz,
+        compound_name=f"{compound} (forehead)", ax=ax,
+    )
+    plt.tight_layout()
+    plt.show()
+```
+
+::: {.callout-tip}
+## Interpreting feature search results
+
+- **Multiple matches** at different retention times may indicate isomers, in-source
+  fragments, or adducts
+- **ppm error** closer to 0 indicates a better mass match — but retention time and MS2
+  confirmation are needed for definitive identification
+- Features present in both forearm and forehead datasets are more likely to be real
+  detections
+:::
+
+## Pharmacokinetic Curves
+
+We extract concentration-time profiles for diphenhydramine (the primary compound) from
+raw peak areas. This preserves the absolute intensity scale needed for meaningful PK
+parameter estimation.
+
+### Forearm Dataset
+
+```{python}
+#| label: pk-curves-forearm
+# Use the best DPH match from forearm (lowest ppm error)
+dph_matches_forearm = search_results["Diphenhydramine"]["forearm"]
+
+if not dph_matches_forearm.empty:
+    best_feature_forearm = dph_matches_forearm["ppm_error"].idxmin()
+    print(f"Best DPH feature (forearm): ID {best_feature_forearm}")
+    print(f"  m/z: {dph_matches_forearm.loc[best_feature_forearm, 'row m/z']:.4f}")
+    print(f"  RT:  {dph_matches_forearm.loc[best_feature_forearm, 'row retention time']:.2f} min")
+    print(f"  ppm error: {dph_matches_forearm.loc[best_feature_forearm, 'ppm_error']:.2f}")
+
+    pk_forearm = extract_pk_curves(raw_forearm, meta_forearm, best_feature_forearm)
+else:
+    print("No DPH feature found in forearm dataset")
+    pk_forearm = pd.DataFrame()
+```
+
+```{python}
+#| label: fig-pk-forearm
+#| fig-cap: "Diphenhydramine pharmacokinetic curves from the forearm dataset. Solid lines = plasma, dashed lines = skin. Each marker shape represents a different subject."
+
+if not pk_forearm.empty:
+    fig, ax = plt.subplots(figsize=(12, 6))
+    plot_pk_curves(pk_forearm, compound_name="Diphenhydramine (forearm)", ax=ax)
+    plt.tight_layout()
+    plt.show()
+```
+
+### Forehead Dataset
+
+```{python}
+#| label: pk-curves-forehead
+dph_matches_forehead = search_results["Diphenhydramine"]["forehead"]
+
+if not dph_matches_forehead.empty:
+    best_feature_forehead = dph_matches_forehead["ppm_error"].idxmin()
+    print(f"Best DPH feature (forehead): ID {best_feature_forehead}")
+    print(f"  m/z: {dph_matches_forehead.loc[best_feature_forehead, 'row m/z']:.4f}")
+    print(f"  RT:  {dph_matches_forehead.loc[best_feature_forehead, 'row retention time']:.2f} min")
+    print(f"  ppm error: {dph_matches_forehead.loc[best_feature_forehead, 'ppm_error']:.2f}")
+
+    pk_forehead = extract_pk_curves(raw_forehead, meta_forehead, best_feature_forehead)
+else:
+    print("No DPH feature found in forehead dataset")
+    pk_forehead = pd.DataFrame()
+```
+
+```{python}
+#| label: fig-pk-forehead
+#| fig-cap: "Diphenhydramine pharmacokinetic curves from the forehead dataset. Solid lines = plasma, dashed lines = skin."
+
+if not pk_forehead.empty:
+    fig, ax = plt.subplots(figsize=(12, 6))
+    plot_pk_curves(pk_forehead, compound_name="Diphenhydramine (forehead)", ax=ax)
+    plt.tight_layout()
+    plt.show()
+```
+
+### Metabolite PK Curves
+
+```{python}
+#| label: metabolite-pk
+# Check for metabolite features and extract PK curves where available
+for compound in ["N-desmethyl-DPH", "DPH N-oxide"]:
+    print(f"\n{'='*60}")
+    print(f"{compound}")
+    print(f"{'='*60}")
+
+    for site, (feat_meta, raw_data, meta) in {
+        "forearm": (feat_forearm, raw_forearm, meta_forearm),
+        "forehead": (feat_forehead, raw_forehead, meta_forehead),
+    }.items():
+        matches = search_results[compound][site]
+        if matches.empty:
+            print(f"  {site}: No features found")
+            continue
+
+        best_id = matches["ppm_error"].idxmin()
+        print(f"  {site}: Best match ID {best_id} (ppm error: {matches.loc[best_id, 'ppm_error']:.2f})")
+
+        pk = extract_pk_curves(raw_data, meta, best_id)
+        if not pk.empty:
+            fig, ax = plt.subplots(figsize=(10, 5))
+            plot_pk_curves(pk, compound_name=f"{compound} ({site})", ax=ax)
+            plt.tight_layout()
+            plt.show()
+```
+
+## PK Parameters
+
+Pharmacokinetic parameters summarize the concentration-time profile for each subject:
+
+- **Cmax**: Maximum observed peak area (proxy for peak concentration)
+- **Tmax**: Timepoint at which Cmax occurs
+- **AUC**: Area under the curve (trapezoidal rule) — total drug exposure
+
+```{python}
+#| label: pk-summary-forearm
+#| tbl-cap: "PK parameters per subject and sample type for diphenhydramine (forearm dataset)."
+
+if not pk_forearm.empty:
+    pk_summary_forearm = summarize_pk_all_subjects(pk_forearm)
+    pk_summary_forearm_display = pk_summary_forearm.copy()
+    pk_summary_forearm_display["Cmax"] = pk_summary_forearm_display["Cmax"].map("{:,.0f}".format)
+    pk_summary_forearm_display["AUC"] = pk_summary_forearm_display["AUC"].map("{:,.0f}".format)
+    pk_summary_forearm_display["Tmax"] = pk_summary_forearm_display["Tmax"].map("{:.0f}".format)
+    show(pk_summary_forearm_display, paging=False, searching=False, info=False, ordering=True)
+```
+
+```{python}
+#| label: pk-summary-forehead
+#| tbl-cap: "PK parameters per subject and sample type for diphenhydramine (forehead dataset)."
+
+if not pk_forehead.empty:
+    pk_summary_forehead = summarize_pk_all_subjects(pk_forehead)
+    pk_summary_forehead_display = pk_summary_forehead.copy()
+    pk_summary_forehead_display["Cmax"] = pk_summary_forehead_display["Cmax"].map("{:,.0f}".format)
+    pk_summary_forehead_display["AUC"] = pk_summary_forehead_display["AUC"].map("{:,.0f}".format)
+    pk_summary_forehead_display["Tmax"] = pk_summary_forehead_display["Tmax"].map("{:.0f}".format)
+    show(pk_summary_forehead_display, paging=False, searching=False, info=False, ordering=True)
+```
+
+::: {.callout-tip}
+## Inter-subject variability
+
+Large differences in Cmax and AUC between subjects are expected in pharmacokinetics —
+factors like body weight, metabolism rate, and skin permeability differ across individuals.
+Tmax variation is also informative: earlier Tmax in plasma vs skin reflects the absorption
+and distribution pathway.
+:::
+
+## Plasma vs Skin Comparison
+
+The central question: does the drug signal in skin correlate with plasma levels? We
+compare PK parameters using Spearman rank correlation (robust with only 7 subjects) and
+analyze the time lag between plasma and skin Tmax.
+
+### Forearm
+
+```{python}
+#| label: comparison-forearm
+if not pk_forearm.empty:
+    comparison_forearm = compare_plasma_skin(pk_summary_forearm)
+
+    print("Cmax correlation:")
+    print(f"  Spearman r = {comparison_forearm['cmax_corr']['r']:.3f}")
+    print(f"  p-value    = {comparison_forearm['cmax_corr']['pvalue']:.3f}")
+    print(f"  n subjects = {comparison_forearm['cmax_corr']['n']}")
+
+    print("\nAUC correlation:")
+    print(f"  Spearman r = {comparison_forearm['auc_corr']['r']:.3f}")
+    print(f"  p-value    = {comparison_forearm['auc_corr']['pvalue']:.3f}")
+
+    print("\nTmax lag (skin - plasma):")
+    print(f"  Mean: {comparison_forearm['tmax_lag']['mean_lag']:.0f} min")
+    print(f"  SD:   {comparison_forearm['tmax_lag']['std_lag']:.0f} min")
+```
+
+```{python}
+#| label: fig-comparison-forearm
+#| fig-cap: "Plasma vs skin PK parameter comparison for diphenhydramine (forearm). Left: Cmax correlation. Center: AUC correlation. Right: Tmax lag per subject."
+
+if not pk_forearm.empty:
+    fig = plot_pk_comparison(pk_summary_forearm, comparison_forearm, compound_name="DPH (forearm)")
+    plt.show()
+```
+
+### Forehead
+
+```{python}
+#| label: comparison-forehead
+if not pk_forehead.empty:
+    comparison_forehead = compare_plasma_skin(pk_summary_forehead)
+
+    print("Cmax correlation:")
+    print(f"  Spearman r = {comparison_forehead['cmax_corr']['r']:.3f}")
+    print(f"  p-value    = {comparison_forehead['cmax_corr']['pvalue']:.3f}")
+    print(f"  n subjects = {comparison_forehead['cmax_corr']['n']}")
+
+    print("\nAUC correlation:")
+    print(f"  Spearman r = {comparison_forehead['auc_corr']['r']:.3f}")
+    print(f"  p-value    = {comparison_forehead['auc_corr']['pvalue']:.3f}")
+
+    print("\nTmax lag (skin - plasma):")
+    print(f"  Mean: {comparison_forehead['tmax_lag']['mean_lag']:.0f} min")
+    print(f"  SD:   {comparison_forehead['tmax_lag']['std_lag']:.0f} min")
+```
+
+```{python}
+#| label: fig-comparison-forehead
+#| fig-cap: "Plasma vs skin PK parameter comparison for diphenhydramine (forehead). Left: Cmax correlation. Center: AUC correlation. Right: Tmax lag per subject."
+
+if not pk_forehead.empty:
+    fig = plot_pk_comparison(pk_summary_forehead, comparison_forehead, compound_name="DPH (forehead)")
+    plt.show()
+```
+
+### Forearm vs Forehead Comparison
+
+```{python}
+#| label: site-comparison
+if not pk_forearm.empty and not pk_forehead.empty:
+    print("Site Comparison Summary")
+    print(f"{'':20s} {'Forearm':>12s} {'Forehead':>12s}")
+    print("-" * 46)
+    print(
+        f"{'Cmax corr (r)':20s} "
+        f"{comparison_forearm['cmax_corr']['r']:12.3f} "
+        f"{comparison_forehead['cmax_corr']['r']:12.3f}"
+    )
+    print(
+        f"{'Cmax corr (p)':20s} "
+        f"{comparison_forearm['cmax_corr']['pvalue']:12.3f} "
+        f"{comparison_forehead['cmax_corr']['pvalue']:12.3f}"
+    )
+    print(
+        f"{'AUC corr (r)':20s} "
+        f"{comparison_forearm['auc_corr']['r']:12.3f} "
+        f"{comparison_forehead['auc_corr']['r']:12.3f}"
+    )
+    print(
+        f"{'AUC corr (p)':20s} "
+        f"{comparison_forearm['auc_corr']['pvalue']:12.3f} "
+        f"{comparison_forehead['auc_corr']['pvalue']:12.3f}"
+    )
+    print(
+        f"{'Mean Tmax lag (min)':20s} "
+        f"{comparison_forearm['tmax_lag']['mean_lag']:12.0f} "
+        f"{comparison_forehead['tmax_lag']['mean_lag']:12.0f}"
+    )
+```
+
+## Summary
+
+::: {.callout-note}
+## Key findings
+
+- **Diphenhydramine is detectable** in both plasma and skin samples via m/z matching at
+  10 ppm tolerance
+- **PK curves show the expected absorption-distribution-elimination profile** with
+  inter-subject variability in peak intensity and timing
+- **Plasma-skin correlation** analysis reveals the degree to which skin sampling reflects
+  systemic drug levels — a prerequisite for non-invasive monitoring
+- **Tmax lag** quantifies the delay between plasma peak and skin peak, reflecting the
+  distribution kinetics from blood to skin
+- **Site comparison** (forearm vs forehead) highlights differences in drug penetration
+  and detectability between anatomical locations
+:::
+
+::: {.callout-tip}
+## Next steps
+
+With targeted compound analysis complete, the data is ready for:
+
+1. **Multivariate analysis** (PLS-DA, OPLS-DA) to identify discriminating metabolic
+   features between timepoints and treatment conditions
+2. **Biomarker discovery** to find skin metabolites that correlate with plasma drug
+   levels — potential non-invasive proxies for therapeutic drug monitoring
+3. **Location comparison** to determine whether forearm or forehead provides better
+   predictive performance for plasma drug levels
+:::

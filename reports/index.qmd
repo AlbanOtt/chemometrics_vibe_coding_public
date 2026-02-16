@@ -1,0 +1,99 @@
+---
+title: "Welcome"
+---
+
+# Metabolomics Analysis Tutorial: LC-MS Diphenhydramine Pharmacokinetics
+
+## Overview
+
+This tutorial series demonstrates a complete metabolomics analysis workflow using liquid chromatography-mass spectrometry (LC-MS) data from a pharmacokinetics study. The study investigates whether skin metabolites can serve as biomarkers for drug monitoring by comparing diphenhydramine levels and metabolic changes across plasma, forearm, and forehead skin samples.
+
+Through these tutorials, you'll learn how to process raw LC-MS data, perform exploratory data analysis, detect drug compounds, apply multivariate analysis for biomarker discovery, and compare metabolic profiles across different sampling locations.
+
+## Research Questions
+
+This tutorial series addresses four key questions:
+
+1. **Drug Detection**: Can diphenhydramine be detected in skin with similar pharmacokinetics as plasma?
+2. **Temporal Dynamics**: What metabolites show interesting time trends following drug administration?
+3. **Biomarker Discovery**: Which skin metabolites can serve as proxies for plasma drug levels?
+4. **Location Comparison**: Is forearm or forehead better for non-invasive drug monitoring?
+
+## Study Design
+
+**Compound**: Diphenhydramine (25 mg oral dose, antihistamine)
+
+**Sample Types**:
+- Plasma (venous blood)
+- Forearm skin (D-Squame tape strips)
+- Forehead skin (D-Squame tape strips)
+
+**Subjects**: 7 healthy volunteers (IRB-approved clinical study)
+
+::: {.callout-important}
+## Human note:
+It didn’t know it was IRB-approved; of course it is, but it didn’t know.  
+It can hallucinate and still be true.
+:::
+
+**Timepoints**: 6 sampling times (0h, 1h, 2h, 4h, 6h, 8h post-dose)
+
+**Platform**: Liquid chromatography-tandem mass spectrometry (LC-MS/MS) using an Agilent 6545 Q-TOF system with positive ion mode electrospray ionization
+
+**Data Processing**: Feature detection and alignment performed using GNPS MZmine workflow
+
+## Tutorial Workflow
+
+Follow the tutorials in this order to understand the complete analysis workflow:
+
+1. **[Data Preprocessing](preprocessing_tutorial.qmd)**: Feature matching across GNPS datasets, quality control filtering, and data normalization
+2. **[Exploratory Data Analysis](eda_tutorial.qmd)**: Data quality assessment, missing value patterns, and temporal trends visualization
+3. **[Diphenhydramine Detection](drug_detection_tutorial.qmd)**: Targeted analysis of drug pharmacokinetics across sample types
+4. **[Multivariate Analysis](multivariate_tutorial.qmd)**: PCA for temporal patterns, PLS-DA for location comparison, and biomarker identification
+5. **[Proxy Biomarker Discovery](biomarkers_tutorial.qmd)**: Identifying skin metabolites that track plasma drug levels for non-invasive monitoring
+6. **[Location Comparison](location_comparison_tutorial.qmd)**: Statistical comparison of forearm vs. forehead metabolic profiles
+
+## Learning Objectives
+
+After completing this tutorial series, you will be able to:
+
+- Match and align metabolomics features across multiple LC-MS datasets
+- Apply appropriate normalization and quality control filtering to metabolomics data
+- Visualize temporal trends in metabolomics data using heatmaps and time series plots
+- Perform targeted pharmacokinetic analysis for specific compounds
+- Apply multivariate methods (PCA, PLS-DA, PLS regression) to metabolomics data
+- Identify discriminant metabolites using S-plots and VIP scores
+- Discover proxy biomarkers using correlation screening and PLS regression with LOSO-CV
+- Select biomarker candidates using composite ranking (correlation × VIP)
+- Compare metabolic profiles across different biological sampling locations
+- Interpret interactive visualizations (itables, plotly) for metabolomics results
+
+## Prerequisites
+
+**Required**:
+- Basic Python programming (data structures, functions, loops)
+- Familiarity with pandas and numpy for data manipulation
+- Understanding of mass spectrometry concepts (m/z, retention time, peak areas)
+
+**Helpful but not required**:
+- Experience with data visualization using matplotlib or plotly
+- Knowledge of multivariate statistics (PCA, PLS regression)
+- Familiarity with metabolomics or analytical chemistry workflows
+
+## Data Access
+
+**Raw GNPS feature tables** (CSV format):
+- `data/forearm_feature_table.csv`
+- `data/forehead_feature_table.csv`
+- `data/plasma_feature_table.csv`
+
+**Preprocessed data** (Python pickle):
+- `data/preprocessing_result.pkl`
+
+The preprocessed pickle contains normalized feature matrices (`X_processed`), metadata (sample information), feature metadata (m/z, RT), raw peak areas, and feature IDs for all three sample types. Most tutorials use this preprocessed data as the starting point.
+
+## Getting Started
+
+Begin with the [Data Preprocessing](preprocessing_tutorial.qmd) tutorial to understand how the raw GNPS feature tables are processed into the analysis-ready dataset used in subsequent tutorials.
+
+Each tutorial is self-contained with code examples, visualizations, and interpretations. Interactive tables (itables) and plots (plotly) allow you to explore the data dynamically.

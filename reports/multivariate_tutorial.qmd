@@ -1,0 +1,672 @@
+---
+title: "Multivariate Analysis for Metabolomics"
+subtitle: "PLS-DA, VIP scores, S-plot, and time-trending features for LC-MS diphenhydramine pharmacokinetics data"
+author: "Alban Ott (Claude Code CLI)"
+date: "2026/02/10"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: false
+    number-sections: true
+    self-contained: true
+execute:
+  warning: false
+---
+
+## Learning Objectives
+
+::: {.callout-note}
+## What you will learn
+
+- Visualize metabolic trajectories over time using PCA score plots
+- Classify early vs late drug exposure timepoints with PLS-DA
+- Assess model significance using permutation testing
+- Identify discriminating features using VIP scores and S-plots
+- Discover time-trending metabolites with Spearman correlation and FDR correction
+- Compare forearm and forehead sampling sites for multivariate drug monitoring
+:::
+
+## Background
+
+After exploratory data analysis (Phase 3) confirmed data quality, supervised multivariate
+methods can identify features that discriminate between experimental conditions. In this
+pharmacokinetics study, the key question is: **which metabolites change systematically after
+diphenhydramine administration?**
+
+We use:
+
+1. **PCA time trajectories** to visualize how individual subjects' metabolic profiles evolve
+   over time in an unsupervised manner
+2. **PLS-DA** (Partial Least Squares Discriminant Analysis) to build a supervised classifier
+   distinguishing early (pre-peak) from late (post-peak) timepoints
+3. **VIP scores** (Variable Importance in Projection) to rank features by their contribution
+   to class separation
+4. **S-plots** to combine magnitude (covariance) and reliability (correlation) for biomarker
+   candidate selection
+5. **Spearman correlation** to identify features with significant monotonic time trends
+
+## Setup
+
+```{python}
+#| label: setup
+import logging
+import pickle
+import sys
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+import seaborn as sns
+from itables import show
+
+# Add project root to path for imports
+project_root = Path.cwd().parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+from src.eda import perform_pca
+from src.multivariate import (
+    assign_time_class,
+    create_splot,
+    extract_splot_biomarkers,
+    find_time_trending_features,
+    perform_plsda,
+    permutation_test_plsda,
+    plot_pca_trajectories_plotly,
+    plot_permutation_test_plotly,
+    plot_plsda_scores_plotly,
+    plot_splot_plotly,
+    plot_time_trending_volcano_plotly,
+    plot_vip_scores_plotly,
+)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(name)s — %(message)s")
+
+# Plot style
+sns.set_theme(style="whitegrid", palette="colorblind")
+plt.rcParams["figure.dpi"] = 120
+```
+
+```{python}
+#| label: load-data
+# Load preprocessed data from Phase 2
+pickle_path = project_root / "data" / "preprocessing_result.pkl"
+with open(pickle_path, "rb") as f:
+    result = pickle.load(f)
+
+# Extract datasets
+X_forearm = result["forearm"]["X_processed"]
+X_forehead = result["forehead"]["X_processed"]
+meta_forearm = result["forearm"]["metadata"]
+meta_forehead = result["forehead"]["metadata"]
+feat_forearm = result["forearm"]["feature_ids"]
+feat_forehead = result["forehead"]["feature_ids"]
+
+# Separate plasma and skin for each site
+plasma_mask_fa = meta_forearm["sample_type"].values == "plasma"
+skin_mask_fa = meta_forearm["sample_type"].values == "skin"
+plasma_mask_fh = meta_forehead["sample_type"].values == "plasma"
+skin_mask_fh = meta_forehead["sample_type"].values == "skin"
+
+X_plasma_fa = X_forearm[plasma_mask_fa]
+X_skin_fa = X_forearm[skin_mask_fa]
+meta_plasma_fa = meta_forearm[plasma_mask_fa].reset_index(drop=True)
+meta_skin_fa = meta_forearm[skin_mask_fa].reset_index(drop=True)
+
+X_plasma_fh = X_forehead[plasma_mask_fh]
+X_skin_fh = X_forehead[skin_mask_fh]
+meta_plasma_fh = meta_forehead[plasma_mask_fh].reset_index(drop=True)
+meta_skin_fh = meta_forehead[skin_mask_fh].reset_index(drop=True)
+
+print(f"Forearm  — plasma: {X_plasma_fa.shape}, skin: {X_skin_fa.shape}")
+print(f"Forehead — plasma: {X_plasma_fh.shape}, skin: {X_skin_fh.shape}")
+print(f"Timepoints: {sorted(meta_plasma_fa['timepoint'].unique())}")
+print(f"Subjects: {sorted(meta_plasma_fa['subject'].unique())}")
+```
+
+## PCA Time Trajectories
+
+Before supervised modeling, PCA trajectories reveal how each subject's metabolic profile
+evolves over time. Each subject's timepoints are connected with lines, making temporal
+patterns visible even in an unsupervised decomposition.
+
+### Plasma
+
+```{python}
+#| label: fig-pca-traj-plasma
+#| fig-cap: "PCA time trajectories for plasma samples. Each subject's timepoints are connected chronologically. Numbers indicate timepoint (minutes post-dose)."
+#| fig-subcap:
+#|   - "Forearm dataset — Plasma"
+#|   - "Forehead dataset — Plasma"
+
+# Forearm plasma
+pca_plasma_fa = perform_pca(X_plasma_fa)
+fig = plot_pca_trajectories_plotly(pca_plasma_fa, meta_plasma_fa)
+fig.update_layout(title="Forearm dataset — Plasma")
+fig.show()
+
+# Forehead plasma
+pca_plasma_fh = perform_pca(X_plasma_fh)
+fig = plot_pca_trajectories_plotly(pca_plasma_fh, meta_plasma_fh)
+fig.update_layout(title="Forehead dataset — Plasma")
+fig.show()
+```
+
+### Skin
+
+```{python}
+#| label: fig-pca-traj-skin
+#| fig-cap: "PCA time trajectories for skin samples. Each subject's timepoints are connected chronologically."
+#| fig-subcap:
+#|   - "Forearm dataset — Skin"
+#|   - "Forehead dataset — Skin"
+
+# Forearm skin
+pca_skin_fa = perform_pca(X_skin_fa)
+fig = plot_pca_trajectories_plotly(pca_skin_fa, meta_skin_fa)
+fig.update_layout(title="Forearm dataset — Skin")
+fig.show()
+
+# Forehead skin
+pca_skin_fh = perform_pca(X_skin_fh)
+fig = plot_pca_trajectories_plotly(pca_skin_fh, meta_skin_fh)
+fig.update_layout(title="Forehead dataset — Skin")
+fig.show()
+```
+
+::: {.callout-tip}
+## Reading PCA trajectories
+
+- **Coherent trajectories** (subjects moving in similar directions) suggest a shared
+  metabolic response to drug treatment
+- **Divergent trajectories** indicate inter-individual variability in drug response
+- **Return to baseline** (trajectory looping back) suggests metabolic recovery at later
+  timepoints (expected for diphenhydramine with t½ ~4–9 hours)
+:::
+
+## PLS-DA: Early vs Late Timepoints
+
+PLS-DA discriminates between timepoint classes to identify features driving the drug effect.
+We split timepoints into early (absorption phase: 0, 120, 240 min) and late (elimination
+phase: 480, 600, 720 min) using a threshold of 240 min. This gives balanced classes with
+21 samples per group in each sample type.
+
+```{python}
+#| label: plsda-setup
+TIME_THRESHOLD = 240.0  # minutes
+
+# Assign classes for all sample subsets
+labels_plasma_fa = assign_time_class(meta_plasma_fa, time_threshold=TIME_THRESHOLD)
+labels_skin_fa = assign_time_class(meta_skin_fa, time_threshold=TIME_THRESHOLD)
+labels_plasma_fh = assign_time_class(meta_plasma_fh, time_threshold=TIME_THRESHOLD)
+labels_skin_fh = assign_time_class(meta_skin_fh, time_threshold=TIME_THRESHOLD)
+```
+
+### Score Plots
+
+```{python}
+#| label: fig-plsda-scores
+#| fig-cap: "PLS-DA score plots discriminating early (0–240 min) vs late (480–720 min) timepoints. R²Y indicates training fit, Q² indicates cross-validated predictive performance."
+#| fig-subcap:
+#|   - "Forearm — Plasma"
+#|   - "Forearm — Skin"
+#|   - "Forehead — Plasma"
+#|   - "Forehead — Skin"
+
+# Forearm plasma
+plsda_plasma_fa = perform_plsda(X_plasma_fa, labels_plasma_fa, n_components=2, cv=7)
+fig = plot_plsda_scores_plotly(plsda_plasma_fa, labels_plasma_fa)
+fig.update_layout(title="Forearm — Plasma")
+fig.show()
+
+# Forearm skin
+plsda_skin_fa = perform_plsda(X_skin_fa, labels_skin_fa, n_components=2, cv=7)
+fig = plot_plsda_scores_plotly(plsda_skin_fa, labels_skin_fa)
+fig.update_layout(title="Forearm — Skin")
+fig.show()
+
+# Forehead plasma
+plsda_plasma_fh = perform_plsda(X_plasma_fh, labels_plasma_fh, n_components=2, cv=7)
+fig = plot_plsda_scores_plotly(plsda_plasma_fh, labels_plasma_fh)
+fig.update_layout(title="Forehead — Plasma")
+fig.show()
+
+# Forehead skin
+plsda_skin_fh = perform_plsda(X_skin_fh, labels_skin_fh, n_components=2, cv=7)
+fig = plot_plsda_scores_plotly(plsda_skin_fh, labels_skin_fh)
+fig.update_layout(title="Forehead — Skin")
+fig.show()
+```
+
+```{python}
+#| label: tbl-plsda-metrics
+#| tbl-cap: "PLS-DA model performance metrics for each sample type and site."
+
+rows = [
+    ("Forearm — Plasma", plsda_plasma_fa["r2y"], plsda_plasma_fa["q2"], plsda_plasma_fa["q2_std"]),
+    ("Forearm — Skin", plsda_skin_fa["r2y"], plsda_skin_fa["q2"], plsda_skin_fa["q2_std"]),
+    ("Forehead — Plasma", plsda_plasma_fh["r2y"], plsda_plasma_fh["q2"], plsda_plasma_fh["q2_std"]),
+    ("Forehead — Skin", plsda_skin_fh["r2y"], plsda_skin_fh["q2"], plsda_skin_fh["q2_std"]),
+]
+metrics_df = pd.DataFrame(rows, columns=["Dataset", "R²Y", "Q²", "Q² std"])
+metrics_df[["R²Y", "Q²", "Q² std"]] = metrics_df[["R²Y", "Q²", "Q² std"]].round(3)
+show(metrics_df, paging=False, searching=False, info=False, ordering=False)
+```
+
+::: {.callout-warning}
+## Interpreting PLS-DA with high-dimensional data
+
+With ~4000 features and only 42 samples per matrix, PLS-DA models are prone to overfitting:
+
+- **R²Y** measures training fit and will be high even with noise
+- **Q²** (cross-validated) is the critical metric — values > 0 indicate some predictive power
+- **Negative Q²** means the model predicts worse than chance in cross-validation
+- The permutation test below provides a formal significance assessment
+:::
+
+### Permutation Test
+
+The permutation test randomly shuffles class labels to build a null distribution of Q² values.
+If the observed Q² is significantly higher than permuted values, the model captures genuine
+class structure.
+
+```{python}
+#| label: fig-permutation
+#| fig-cap: "Permutation test for PLS-DA model significance. The red dashed line shows the observed Q², and the histogram shows the null distribution from 100 label permutations."
+#| fig-subcap:
+#|   - "Forearm — Plasma"
+#|   - "Forearm — Skin"
+#|   - "Forehead — Plasma"
+#|   - "Forehead — Skin"
+
+# Forearm plasma
+perm_plasma_fa = permutation_test_plsda(X_plasma_fa, labels_plasma_fa, n_permutations=100, cv=7)
+fig = plot_permutation_test_plotly(perm_plasma_fa)
+fig.update_layout(title="Forearm — Plasma")
+fig.show()
+
+# Forearm skin
+perm_skin_fa = permutation_test_plsda(X_skin_fa, labels_skin_fa, n_permutations=100, cv=7)
+fig = plot_permutation_test_plotly(perm_skin_fa)
+fig.update_layout(title="Forearm — Skin")
+fig.show()
+
+# Forehead plasma
+perm_plasma_fh = permutation_test_plsda(X_plasma_fh, labels_plasma_fh, n_permutations=100, cv=7)
+fig = plot_permutation_test_plotly(perm_plasma_fh)
+fig.update_layout(title="Forehead — Plasma")
+fig.show()
+
+# Forehead skin
+perm_skin_fh = permutation_test_plsda(X_skin_fh, labels_skin_fh, n_permutations=100, cv=7)
+fig = plot_permutation_test_plotly(perm_skin_fh)
+fig.update_layout(title="Forehead — Skin")
+fig.show()
+```
+
+```{python}
+#| label: tbl-permutation
+#| tbl-cap: "Permutation test p-values for PLS-DA models."
+
+perm_rows = [
+    ("Forearm — Plasma", perm_plasma_fa["observed_q2"], perm_plasma_fa["pvalue"]),
+    ("Forearm — Skin", perm_skin_fa["observed_q2"], perm_skin_fa["pvalue"]),
+    ("Forehead — Plasma", perm_plasma_fh["observed_q2"], perm_plasma_fh["pvalue"]),
+    ("Forehead — Skin", perm_skin_fh["observed_q2"], perm_skin_fh["pvalue"]),
+]
+perm_df = pd.DataFrame(perm_rows, columns=["Dataset", "Observed Q²", "p-value"])
+perm_df["Observed Q²"] = perm_df["Observed Q²"].round(3)
+perm_df["p-value"] = perm_df["p-value"].round(4)
+perm_df["Significant (p<0.05)"] = perm_df["p-value"] < 0.05
+show(perm_df, paging=False, searching=False, info=False, ordering=False)
+```
+
+## VIP Scores
+
+VIP scores identify features most important for the PLS-DA class separation. Features with
+VIP > 1.0 contribute above average to the model.
+
+```{python}
+#| label: fig-vip
+#| fig-cap: "Top 30 VIP scores from PLS-DA for each sample type and site. Red bars indicate VIP > 1.0."
+#| fig-subcap:
+#|   - "Forearm — Plasma"
+#|   - "Forearm — Skin"
+#|   - "Forehead — Plasma"
+#|   - "Forehead — Skin"
+
+# Forearm plasma
+fig = plot_vip_scores_plotly(plsda_plasma_fa["vip"], feat_forearm, n_top=30)
+fig.update_layout(title="Forearm — Plasma")
+fig.show()
+
+# Forearm skin
+fig = plot_vip_scores_plotly(plsda_skin_fa["vip"], feat_forearm, n_top=30)
+fig.update_layout(title="Forearm — Skin")
+fig.show()
+
+# Forehead plasma
+fig = plot_vip_scores_plotly(plsda_plasma_fh["vip"], feat_forehead, n_top=30)
+fig.update_layout(title="Forehead — Plasma")
+fig.show()
+
+# Forehead skin
+fig = plot_vip_scores_plotly(plsda_skin_fh["vip"], feat_forehead, n_top=30)
+fig.update_layout(title="Forehead — Skin")
+fig.show()
+```
+
+```{python}
+#| label: tbl-vip-counts
+#| tbl-cap: "Number of features with VIP > 1.0 for each dataset."
+
+vip_rows = [
+    ("Forearm — Plasma", int(np.sum(plsda_plasma_fa["vip"] > 1.0)), len(feat_forearm)),
+    ("Forearm — Skin", int(np.sum(plsda_skin_fa["vip"] > 1.0)), len(feat_forearm)),
+    ("Forehead — Plasma", int(np.sum(plsda_plasma_fh["vip"] > 1.0)), len(feat_forehead)),
+    ("Forehead — Skin", int(np.sum(plsda_skin_fh["vip"] > 1.0)), len(feat_forehead)),
+]
+vip_df = pd.DataFrame(vip_rows, columns=["Dataset", "Features VIP > 1.0", "Total features"])
+vip_df["Fraction (%)"] = (vip_df["Features VIP > 1.0"] / vip_df["Total features"] * 100).round(1)
+show(vip_df, paging=False, searching=False, info=False, ordering=False)
+```
+
+## S-Plot: Biomarker Selection
+
+The S-plot combines covariance (magnitude of change — x-axis) with correlation (reliability
+of change — y-axis) from the first PLS-DA component. Features in the extreme corners
+(high |covariance| AND high |correlation|) are the most promising biomarker candidates.
+
+```{python}
+#| label: fig-splot
+#| fig-cap: "S-plots for biomarker selection. Red dots indicate features with high covariance (>95th percentile) AND high correlation (>0.8) with the discriminant component."
+#| fig-subcap:
+#|   - "Forearm — Plasma"
+#|   - "Forearm — Skin"
+#|   - "Forehead — Plasma"
+#|   - "Forehead — Skin"
+
+# Forearm plasma
+p_cov_pf, p_corr_pf = create_splot(X_plasma_fa, plsda_plasma_fa["model"])
+fig = plot_splot_plotly(p_cov_pf, p_corr_pf, feat_forearm)
+fig.update_layout(title="Forearm — Plasma")
+fig.show()
+
+# Forearm skin
+p_cov_sf, p_corr_sf = create_splot(X_skin_fa, plsda_skin_fa["model"])
+fig = plot_splot_plotly(p_cov_sf, p_corr_sf, feat_forearm)
+fig.update_layout(title="Forearm — Skin")
+fig.show()
+
+# Forehead plasma
+p_cov_ph, p_corr_ph = create_splot(X_plasma_fh, plsda_plasma_fh["model"])
+fig = plot_splot_plotly(p_cov_ph, p_corr_ph, feat_forehead)
+fig.update_layout(title="Forehead — Plasma")
+fig.show()
+
+# Forehead skin
+p_cov_sh, p_corr_sh = create_splot(X_skin_fh, plsda_skin_fh["model"])
+fig = plot_splot_plotly(p_cov_sh, p_corr_sh, feat_forehead)
+fig.update_layout(title="Forehead — Skin")
+fig.show()
+```
+
+### Biomarker Candidate Tables
+
+Extract features identified as biomarker candidates from the S-plots (high covariance >95th percentile AND high correlation >0.8).
+
+```{python}
+#| label: extract-biomarkers
+# Extract biomarker candidates from each S-plot
+biomarkers_plasma_fa = extract_splot_biomarkers(p_cov_pf, p_corr_pf, feat_forearm)
+biomarkers_skin_fa = extract_splot_biomarkers(p_cov_sf, p_corr_sf, feat_forearm)
+biomarkers_plasma_fh = extract_splot_biomarkers(p_cov_ph, p_corr_ph, feat_forehead)
+biomarkers_skin_fh = extract_splot_biomarkers(p_cov_sh, p_corr_sh, feat_forehead)
+```
+
+```{python}
+#| label: tbl-biomarkers-forearm-plasma
+#| tbl-cap: "S-plot biomarker candidates for Forearm — Plasma (high covariance >95th percentile AND high correlation >0.8)."
+
+show(
+    biomarkers_plasma_fa.round(3),
+    paging=True,
+    searching=True,
+    info=True,
+    ordering=True,
+)
+```
+
+```{python}
+#| label: tbl-biomarkers-forearm-skin
+#| tbl-cap: "S-plot biomarker candidates for Forearm — Skin (high covariance >95th percentile AND high correlation >0.8)."
+
+show(
+    biomarkers_skin_fa.round(3),
+    paging=True,
+    searching=True,
+    info=True,
+    ordering=True,
+)
+```
+
+```{python}
+#| label: tbl-biomarkers-forehead-plasma
+#| tbl-cap: "S-plot biomarker candidates for Forehead — Plasma (high covariance >95th percentile AND high correlation >0.8)."
+
+show(
+    biomarkers_plasma_fh.round(3),
+    paging=True,
+    searching=True,
+    info=True,
+    ordering=True,
+)
+```
+
+```{python}
+#| label: tbl-biomarkers-forehead-skin
+#| tbl-cap: "S-plot biomarker candidates for Forehead — Skin (high covariance >95th percentile AND high correlation >0.8)."
+
+show(
+    biomarkers_skin_fh.round(3),
+    paging=True,
+    searching=True,
+    info=True,
+    ordering=True,
+)
+```
+
+```{python}
+#| label: tbl-biomarker-counts
+#| tbl-cap: "Number of S-plot biomarker candidates per dataset."
+
+biomarker_counts = pd.DataFrame(
+    [
+        ("Forearm — Plasma", len(biomarkers_plasma_fa)),
+        ("Forearm — Skin", len(biomarkers_skin_fa)),
+        ("Forehead — Plasma", len(biomarkers_plasma_fh)),
+        ("Forehead — Skin", len(biomarkers_skin_fh)),
+    ],
+    columns=["Dataset", "Biomarker Candidates"],
+)
+
+show(biomarker_counts, paging=False, searching=False, info=False, ordering=False)
+```
+
+::: {.callout-tip}
+## Using biomarker candidate tables
+
+These tables list features identified from the S-plot with BOTH:
+- High covariance magnitude (>95th percentile)
+- High correlation magnitude (>0.8)
+
+Features are sorted by absolute covariance (most important first). These candidates should be prioritized for:
+1. MS/MS spectrum acquisition
+2. Database matching (GNPS, METLIN, HMDB)
+3. Biological interpretation
+:::
+
+::: {.callout-tip}
+## Interpreting S-plots
+
+- **Upper-right corner**: Features that increase in the "late" class with high reliability
+- **Lower-left corner**: Features that decrease in the "late" class with high reliability
+- **Center**: Features with little discriminating power (noise)
+- Candidates in the corners are prioritized for biological investigation and identification
+:::
+
+## Time-Trending Features
+
+An orthogonal approach to PLS-DA, Spearman rank correlation identifies features with
+significant monotonic trends over time regardless of class assignment. This captures gradual
+changes that may not align with a binary early/late split.
+
+```{python}
+#| label: time-trending
+# Find time-trending features for each subset
+trending_plasma_fa = find_time_trending_features(
+    X_plasma_fa, meta_plasma_fa["timepoint"].values, feat_forearm
+)
+trending_skin_fa = find_time_trending_features(
+    X_skin_fa, meta_skin_fa["timepoint"].values, feat_forearm
+)
+trending_plasma_fh = find_time_trending_features(
+    X_plasma_fh, meta_plasma_fh["timepoint"].values, feat_forehead
+)
+trending_skin_fh = find_time_trending_features(
+    X_skin_fh, meta_skin_fh["timepoint"].values, feat_forehead
+)
+```
+
+```{python}
+#| label: fig-volcano
+#| fig-cap: "Volcano plots of time-trending features. Each dot is a feature; x-axis shows Spearman correlation with timepoint, y-axis shows -log10(FDR p-value). Red dots are significant at FDR < 0.05."
+#| fig-subcap:
+#|   - "Forearm — Plasma"
+#|   - "Forearm — Skin"
+#|   - "Forehead — Plasma"
+#|   - "Forehead — Skin"
+
+# Forearm plasma
+fig = plot_time_trending_volcano_plotly(trending_plasma_fa)
+fig.update_layout(title="Forearm — Plasma")
+fig.show()
+
+# Forearm skin
+fig = plot_time_trending_volcano_plotly(trending_skin_fa)
+fig.update_layout(title="Forearm — Skin")
+fig.show()
+
+# Forehead plasma
+fig = plot_time_trending_volcano_plotly(trending_plasma_fh)
+fig.update_layout(title="Forehead — Plasma")
+fig.show()
+
+# Forehead skin
+fig = plot_time_trending_volcano_plotly(trending_skin_fh)
+fig.update_layout(title="Forehead — Skin")
+fig.show()
+```
+
+```{python}
+#| label: tbl-trending-counts
+#| tbl-cap: "Number of time-trending features by direction (increasing/decreasing with time)."
+
+def trending_summary(trending_df: pd.DataFrame, name: str) -> dict:
+    sig = trending_df[trending_df["significant"]]
+    return {
+        "Dataset": name,
+        "Total significant": len(sig),
+        "Increasing (ρ > 0)": int((sig["rho"] > 0).sum()),
+        "Decreasing (ρ < 0)": int((sig["rho"] < 0).sum()),
+        "Max |ρ|": f"{sig['rho'].abs().max():.3f}" if len(sig) > 0 else "—",
+    }
+
+trending_rows = [
+    trending_summary(trending_plasma_fa, "Forearm — Plasma"),
+    trending_summary(trending_skin_fa, "Forearm — Skin"),
+    trending_summary(trending_plasma_fh, "Forehead — Plasma"),
+    trending_summary(trending_skin_fh, "Forehead — Skin"),
+]
+show(pd.DataFrame(trending_rows), paging=False, searching=False, info=False, ordering=False)
+```
+
+```{python}
+#| label: tbl-top-trending
+#| tbl-cap: "Top 10 time-trending features in forearm plasma (strongest absolute correlation with timepoint)."
+
+top_trending = trending_plasma_fa[trending_plasma_fa["significant"]].head(10).copy()
+top_trending["rho"] = top_trending["rho"].round(3)
+top_trending["pvalue_fdr"] = top_trending["pvalue_fdr"].apply(lambda x: f"{x:.2e}")
+show(top_trending[["feature_id", "rho", "pvalue_fdr"]], paging=False, searching=False, info=False, ordering=True)
+```
+
+## Summary
+
+```{python}
+#| label: tbl-overall-summary
+#| tbl-cap: "Summary of multivariate analysis results across datasets."
+
+summary_rows = [
+    ("Forearm — Plasma",
+     f"{plsda_plasma_fa['r2y']:.3f}", f"{plsda_plasma_fa['q2']:.3f}",
+     f"{perm_plasma_fa['pvalue']:.4f}",
+     int(np.sum(plsda_plasma_fa["vip"] > 1.0)),
+     int(trending_plasma_fa["significant"].sum())),
+    ("Forearm — Skin",
+     f"{plsda_skin_fa['r2y']:.3f}", f"{plsda_skin_fa['q2']:.3f}",
+     f"{perm_skin_fa['pvalue']:.4f}",
+     int(np.sum(plsda_skin_fa["vip"] > 1.0)),
+     int(trending_skin_fa["significant"].sum())),
+    ("Forehead — Plasma",
+     f"{plsda_plasma_fh['r2y']:.3f}", f"{plsda_plasma_fh['q2']:.3f}",
+     f"{perm_plasma_fh['pvalue']:.4f}",
+     int(np.sum(plsda_plasma_fh["vip"] > 1.0)),
+     int(trending_plasma_fh["significant"].sum())),
+    ("Forehead — Skin",
+     f"{plsda_skin_fh['r2y']:.3f}", f"{plsda_skin_fh['q2']:.3f}",
+     f"{perm_skin_fh['pvalue']:.4f}",
+     int(np.sum(plsda_skin_fh["vip"] > 1.0)),
+     int(trending_skin_fh["significant"].sum())),
+]
+
+summary_df = pd.DataFrame(
+    summary_rows,
+    columns=["Dataset", "R²Y", "Q²", "Perm. p-value", "VIP > 1.0", "Time-trending (FDR<0.05)"]
+)
+show(summary_df, paging=False, searching=False, info=False, ordering=False)
+```
+
+::: {.callout-note}
+## Key findings
+
+- **PCA trajectories** show subject-specific metabolic evolution over time, with some
+  subjects exhibiting coherent temporal patterns consistent with drug pharmacokinetics
+- **PLS-DA** achieves high training R²Y but may show negative Q², reflecting the challenge
+  of discriminating timepoints with p >> n (thousands of features, ~42 samples per matrix).
+  Permutation testing provides a formal assessment of model significance
+- **VIP scores** identify a subset of features contributing most to class separation — these
+  are candidates for targeted validation
+- **S-plots** narrow the candidate list to features that are both high-magnitude and reliable,
+  prioritizing the most promising biomarkers
+- **Time-trending analysis** offers a complementary, model-free approach using Spearman
+  correlation with FDR correction, capturing gradual metabolic changes without requiring
+  binary classification
+:::
+
+::: {.callout-tip}
+## Next steps
+
+With discriminating features identified, the data is ready for:
+
+1. **Proxy biomarker discovery** (Phase 6) — correlate skin features with plasma drug levels
+   to identify non-invasive monitoring candidates
+2. **Location comparison** (Phase 7) — quantify which skin site (forearm vs forehead) best
+   predicts plasma drug concentrations
+3. **Metabolite identification** — annotate top VIP/S-plot candidates using MS/MS spectra
+   and database matching
+:::
