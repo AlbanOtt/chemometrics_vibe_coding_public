@@ -12,14 +12,16 @@ Everything here was built with Claude Code CLI guided by domain-specific skills 
 
 ## What's Inside
 
-### The Complete Materials
+### The Analysis
 
-- **Unified Quarto book** (`reports/`): A two-part book combining workshop and tutorials
-  - **Part I: Workshop Introduction** - Interactive Reveal.js presentation covering vibe coding methodology, live demos, and practical guidance
-  - **Part II: Analysis Tutorials** - Seven self-contained HTML chapters walking through the full metabolomics analysis with interactive plots and interpretation
 - **6 Python modules** (`src/`): preprocessing, exploratory data analysis, targeted drug detection, multivariate modeling (PCA/PLS-DA), proxy biomarker discovery, and sampling location comparison
+- **7-chapter Quarto book** (`reports/`): self-contained HTML tutorials walking through the full analysis with interactive plots and interpretation
 - **Test suite** (`tests/`): automated tests for the analysis modules
 - **Real LC-MS dataset**: preprocessed GNPS quantification data from a diphenhydramine PK study
+
+### The Workshop
+
+- **Reveal.js presentation** (`presentation/`): self-contained HTML slide deck covering vibe coding methodology, live demos, and practical guidance
 - **7 Claude Code skills** (`.claude/skills/`): domain expertise that guides the AI during analysis — from metabolomics processing to validation strategies
 - **Project configuration** (`CLAUDE.md`, `AGENTS.md`): examples of how to frame AI-assisted workflows with coding standards, testing requirements, and domain conventions
 - **Example prompts** (`prompts/`): workshop objectives and analysis prompts
@@ -28,21 +30,6 @@ Everything here was built with Claude Code CLI guided by domain-specific skills 
 
 ```
 chemometrics_vibe_coding_public/
-├── reports/                            # Quarto documentation
-│   ├── _quarto.yml                     # Book configuration
-│   ├── index.qmd                       # Welcome and study overview
-│   ├── preprocessing_tutorial.qmd      # Data preprocessing
-│   ├── eda_tutorial.qmd                # Exploratory data analysis
-│   ├── drug_detection_tutorial.qmd     # Diphenhydramine detection and PK
-│   ├── multivariate_tutorial.qmd       # Multivariate modeling
-│   ├── biomarkers_tutorial.qmd         # Proxy biomarker discovery
-│   ├── location_comparison_tutorial.qmd # Sampling location comparison
-│   ├── references.bib                  # Shared bibliography
-│   ├── build.sh                        # Build script for book + presentation
-│   └── presentation/                   # Workshop presentation (separate project)
-│       ├── _quarto.yml                 # Presentation configuration
-│       ├── workshop_presentation.qmd   # Reveal.js slides
-│       └── custom.scss                 # Presentation styling
 ├── src/                                # Analysis modules
 │   ├── preprocessing.py                # Data loading, blank filtering, PQN normalization
 │   ├── eda.py                          # Intensity distributions, PCA QC, outlier detection
@@ -55,6 +42,18 @@ chemometrics_vibe_coding_public/
 │   ├── test_multivariate.py
 │   ├── test_biomarkers.py
 │   └── test_location_comparison.py
+├── reports/                            # Quarto book (7 chapters)
+│   ├── _quarto.yml                     # Book configuration
+│   ├── index.qmd                       # Welcome and study design
+│   ├── preprocessing_tutorial.qmd      # Data preprocessing
+│   ├── eda_tutorial.qmd                # Exploratory data analysis
+│   ├── drug_detection_tutorial.qmd     # Diphenhydramine detection and PK
+│   ├── multivariate_tutorial.qmd       # Multivariate modeling
+│   ├── biomarkers_tutorial.qmd         # Proxy biomarker discovery
+│   └── location_comparison_tutorial.qmd # Sampling location comparison
+├── presentation/                       # Workshop slides
+│   ├── workshop_presentation.qmd       # Quarto reveal.js source
+│   └── workshop_presentation.html      # Rendered presentation
 ├── .claude/
 │   └── skills/                         # Claude Code domain skills
 │       ├── chemometrics-shared/        # Shared foundations
@@ -79,14 +78,12 @@ chemometrics_vibe_coding_public/
 
 ### View the outputs (no installation needed)
 
-📚 **Read the complete materials online**:
+**📚 Read the analysis online**: The complete metabolomics tutorial is available at:
 **https://albanott.github.io/chemometrics_vibe_coding_public/**
 
-The book includes:
-- **Workshop Introduction** - Interactive Reveal.js presentation covering vibe coding methodology
-- **Analysis Tutorials** - Seven hands-on metabolomics analysis tutorials
-
 No installation, no setup, just click and read. All interactive plots and tables work directly in your browser.
+
+**🎤 View the presentation**: Download `presentation/workshop_presentation.html` and open in a browser.
 
 ### Reproduce or extend the analysis
 
@@ -103,19 +100,12 @@ uv sync
 # Run tests
 uv run pytest
 
-# Build the complete documentation (book + presentation)
+# Build the book locally (optional)
 cd reports
-bash build.sh
+uv run quarto render
 
-# Or build individually:
-# Book only: quarto render --no-execute
-# Presentation only: cd presentation && quarto render
-
-# Preview with live reload (book)
+# Or preview with live reload
 uv run quarto preview
-
-# Preview presentation
-cd presentation && uv run quarto preview
 ```
 
 **Note for students**: The repository is lightweight (~100MB) because built HTML files are automatically deployed to GitHub Pages rather than included in git. You can view the analysis online or build it locally.

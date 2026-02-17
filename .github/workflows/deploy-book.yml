@@ -38,15 +38,12 @@ jobs:
           python-version-file: "pyproject.toml"
 
       - name: Install dependencies
-        run: |
-          uv sync --frozen
-          uv run quarto add flashcards
+        run: uv sync --frozen
 
       - name: Render Quarto book
         run: |
           cd reports
           uv run quarto render
-          uv run quarto render presentation 
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
