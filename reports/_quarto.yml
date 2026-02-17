@@ -1,10 +1,9 @@
 project:
   type: book
-  output-dir: _book
 
 book:
-  title: "Metabolomics Analysis with Vibe Coding"
-  subtitle: "AI-Assisted LC-MS Data Analysis Tutorial"
+  title: "Metabolomics Analysis Tutorial"
+  subtitle: "LC-MS Diphenhydramine Pharmacokinetics in Skin and Plasma"
   author: "Alban Ott (Claude Code CLI)"
   date: today
   image: opengraph.png
@@ -18,8 +17,6 @@ book:
     - multivariate_tutorial.qmd
     - biomarkers_tutorial.qmd
     - location_comparison_tutorial.qmd
-
-bibliography: references.bib
 
 format:
   html:

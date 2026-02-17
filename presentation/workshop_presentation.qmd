@@ -2,6 +2,22 @@
 title: "Vibe Coding for Chemometrics"
 subtitle: "Building AI-Assisted Analysis Workflows from Scratch"
 author: "Alban Ott"
+format:
+  revealjs:
+    theme: [default, custom.scss]
+    fontsize: 200%
+    incremental: false
+    slide-number: true
+    preview-links: auto
+    transition: slide
+    background-transition: fade
+    code-line-numbers: false
+    self-contained: true
+    flashcards: 
+      showFlipButton: false
+revealjs-plugins:
+  - parmsam/flashcards
+bibliography: references.bib
 from: markdown+emoji
 ---
 
@@ -17,7 +33,7 @@ from: markdown+emoji
 :::
 
 ::: {.column width="50%"}
-![](../../assets/bad_vibecoding_vs_good_vibe_coding.png){width=100%}
+![](../assets/bad_vibecoding_vs_good_vibe_coding.png){width=100%}
 :::
 :::
 
@@ -49,7 +65,7 @@ We will go backward: from the final reports to the construction of a vibe coding
 - Claude Code usage and cybersecurity
 
 ::: footer
-![](../../assets/Claude_AI_logo.png){width=10%}
+![](../assets/Claude_AI_logo.png){width=10%}
 :::
 
 ## What We Will NOT Cover Today 🙈 {.smaller}
@@ -87,7 +103,7 @@ However, now I can run multiple sessions. And I have documented my knowledge.
 :::
 
 ::: {.column width="50%"}
-![](../../assets/current_vs_vibe.png){width=100%}
+![](../assets/current_vs_vibe.png){width=100%}
 :::
 :::
 
@@ -108,8 +124,8 @@ Example:
 
 :::
 ::: {.column width="50%"}
-![](../../assets/bad_knowledge_management.png){width=100%}
-![](../../assets/good_knowledge_management.png){width=100%}
+![](../assets/bad_knowledge_management.png){width=100%}
+![](../assets/good_knowledge_management.png){width=100%}
 :::
 :::
 
@@ -195,7 +211,7 @@ If you’re not familiar with [Quarto](https://quarto.org/), it is the successor
 Want to learn more?  
 Please visit Mickaël Canouil’s course, "Mastering Quarto CLI: From Authoring to Publishing," at [https://m.canouil.dev/mastering-quarto-cli/](https://m.canouil.dev/mastering-quarto-cli/)
 
-The [report](../index.html).
+The [report](../reports/_book/index.html).
 
 ::: {.callout-note}
 🧠 During the tour, please ask yourself:
@@ -225,17 +241,17 @@ Did you notice the trick I used in my prompt?
 
 ## Data Preprocessing
 
-[2  Metabolomics Data Preprocessing](../preprocessing_tutorial.html).
+[2  Metabolomics Data Preprocessing](../reports/_book/preprocessing_tutorial.html).
 
 See "Human notes":
 
-- [Bad coding practice](preprocessing_tutorial.html#sec-blank-filtering)
-- [Bad imputation practice](preprocessing_tutorial.html#step-4-zero-handling)
-- [PQN vs autoscale](preprocessing_tutorial.html#step-5-pqn-normalization)
+- [Bad coding practice](../reports/_book/preprocessing_tutorial.html#sec-blank-filtering)
+- [Bad imputation practice](../reports/_book/preprocessing_tutorial.html#step-4-zero-handling)
+- [PQN vs autoscale](../reports/_book/preprocessing_tutorial.html#step-5-pqn-normalization)
 
 ## EDA
 
-- The [Timepoint PCA](../eda_tutorial.html) with Plotly really helps with interpretation.
+- The [Timepoint PCA](../reports/_book/eda_tutorial.html) with Plotly really helps with interpretation.
 
 ## Compound Detection
 
@@ -254,20 +270,20 @@ For some reason, I don't have the 24h in the dataset.
 
 ::: {.columns}
 ::: {.column width="50%"}
-![](../../assets/original_paper_location_comparison.png){width=80%}
+![](../assets/original_paper_location_comparison.png){width=80%}
 :::
 ::: {.column width="50%"}
-![](../../assets/original_paper_location_comparison_Diphenhydramine.png){width=80%}
-![](../../assets/original_paper_location_comparison_Diphenhydramine_N-oxide.png){width=80%}
+![](../assets/original_paper_location_comparison_Diphenhydramine.png){width=80%}
+![](../assets/original_paper_location_comparison_Diphenhydramine_N-oxide.png){width=80%}
 :::
 :::
 :::
 
 ## Multivariate
 
-- We can find N-desmethyl-DPH [4312](multivariate_tutorial.html#fig-vip-4) in the VIP.
-- We can find DPH N-oxide [5053](multivariate_tutorial.html#fig-vip-4) in the VIP.
-- We can find Diphenhydramine [4589](multivariate_tutorial.html#fig-vip-4) in the VIP.
+- We can find N-desmethyl-DPH [4312](../reports/_book/multivariate_tutorial.html#fig-vip-4) in the VIP.
+- We can find DPH N-oxide [5053](../reports/_book/multivariate_tutorial.html#fig-vip-4) in the VIP.
+- We can find Diphenhydramine [4589](../reports/_book/multivariate_tutorial.html#fig-vip-4) in the VIP.
 
 ## Summary {.smaller}
 
@@ -303,25 +319,25 @@ Speaking of Claude, we must be clear about what we are talking about because the
 
 Claude in a browser 🕸
 
-![](../../assets/claude_in_browser.png)
+![](../assets/claude_in_browser.png)
 
 ---
 
 Claude Desktop 💻
 
-![](../../assets/claude_desktop.png)
+![](../assets/claude_desktop.png)
 
 ---
 
 Claude VS Code extension ⌨
 
-![](../../assets/Claude_vscode_extension.png)
+![](../assets/Claude_vscode_extension.png)
 
 ---
 
 Claude CLI 📟
 
-![](../../assets/claude_cli.png)
+![](../assets/claude_cli.png)
 
 ## Claude CLI
 
@@ -343,12 +359,12 @@ You should keep a close eye on your credits either with `usage` or on the web pa
 ::: {.column width="40%"}
 ### CLI
 
-![](../../assets/claude_usage_cli.png)
+![](../assets/claude_usage_cli.png)
 :::
 ::: {.column width="60%"}
 ### Web
 
-![](../../assets/claude_usage_web.png)
+![](../assets/claude_usage_web.png)
 :::
 :::
 
@@ -356,7 +372,7 @@ You should keep a close eye on your credits either with `usage` or on the web pa
 
 ### Web
 
-![](../../assets/claude_usage_web.png)
+![](../assets/claude_usage_web.png)
 
 ::: {style="font-size: 0.85em"}
 A full session (reaching 100%) fills about 10% of the weekly limits.
@@ -487,7 +503,7 @@ Context exploration uses a lot of credits.
 
 It identifies that Phase 6 was not completed.
 
-![](../../assets/first_prompt_what_is_missing.png)
+![](../assets/first_prompt_what_is_missing.png)
 
 The messier your project is, the more useless files it reads and wastes your credits for nothing.
 
@@ -497,7 +513,7 @@ In addition, it increases the chances of hallucinations.
 
 It proposes various options, we will do Phase 6 implementation
 
-![](../../assets/first_prompt_options.png)
+![](../assets/first_prompt_options.png)
 
 Eventually, it consumed about 20% of my 5-hour credits.
 
@@ -517,23 +533,23 @@ I switched to Sonnet 4.5 to save credits.
 
 > I planned in a previous session, now I want to implement the \@data/CD-MRG-metabolomics_summerschool_2023/plan_phase6.md plan
 
-![](../../assets/first_prompt_implementing.png)
+![](../assets/first_prompt_implementing.png)
 
 ---
 
 It runs the code by itself and detects an error.
 
-![](../../assets/first_prompt_implementing_error.png)
+![](../assets/first_prompt_implementing_error.png)
 
 Then it fixes the error by itself.
 
-![](../../assets/first_prompt_implementing_fix.png)
+![](../assets/first_prompt_implementing_fix.png)
 
 ---
 
 Finalize the implementation.
 
-![](../../assets/first_prompt_implementing_finish.png)
+![](../assets/first_prompt_implementing_finish.png)
 
 ---
 
@@ -541,11 +557,11 @@ It didn't implement the quarto notebook, we ask it.
 
 > You didn't create the quarto file for this analysis !
 
-![](../../assets/first_prompt_implementing_finish_quarto.png)
+![](../assets/first_prompt_implementing_finish_quarto.png)
 
 ## Let's Look at the Report
 
-[Report](../index.html)
+[Report](../reports/_book/index.html)
 
 Now we saw how Claude behaves when we send simple prompts.
 What did we do in anticipation to reach such a behavior?
@@ -770,8 +786,8 @@ Think of skills as:
 - How to perform a **task** not a workflow, that would be agents.
 :::
 ::: {.column width="50%"}
-![](../../assets/bad_knowledge_management.png){width=60%}
-![](../../assets/good_knowledge_management.png){width=60%}
+![](../assets/bad_knowledge_management.png){width=60%}
+![](../assets/good_knowledge_management.png){width=60%}
 :::
 :::
 :::
