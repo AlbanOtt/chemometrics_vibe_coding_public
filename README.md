@@ -2,6 +2,10 @@
 
 A vibe coding template with a complete LC-MS metabolomics analysis and workshop materials, built entirely with Claude Code CLI.
 
+Html slides can be dowloaded [here](https://github.com/AlbanOtt/chemometrics_vibe_coding_public/tree/main/presentation/workshop_presentation.html)
+
+The produced vibe-coded reports are published on the [github page](https://albanott.github.io/chemometrics_vibe_coding_public/). Please note, it is not meant to be a nicely curated set of report but a demonstration of what can be achieved with vibe coding in a real-world scientific analysis. The code and reports are not polished for public consumption but rather serve as a transparent artifact of the vibe coding process, showcasing both its potential and current limitations in a complex domain like chemometrics.
+
 ## Overview
 
 This repository serves two purposes: a **teaching resource** for AI-assisted scientific analysis and a **production artifact** — a complete metabolomics study you can read, reproduce, and extend.
