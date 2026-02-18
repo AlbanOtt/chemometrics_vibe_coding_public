@@ -583,10 +583,10 @@ I should be there max 1h30 after the start, meaning before 11:00.
 ## Overview
 
 - `CLAUDE.md` lists what it should always know about the project
-- Skills
- - `quarto-authoring` Full documentation on Quarto, by Mickaël Canouil
- - `chemometrics-ms-metabolomics` based on Boccard & Rudaz 2018 - Extracting Knowledge from MS Clinical Metabolomic Data
- - `skill creator` a skill to create skill, by Anthropic.
+-  Skills guide Claude on how to perform specific tasks, e.g., "how to preprocess LC-MS data?"
+- `quarto-authoring` Full documentation on Quarto, by Mickaël Canouil
+- `chemometrics-ms-metabolomics` based on Boccard & Rudaz 2018 - Extracting Knowledge from MS Clinical Metabolomic Data
+- `skill creator` a skill to create skill, by Anthropic.
 
 ## What Is CLAUDE.md?
 
@@ -639,8 +639,7 @@ Think of it as **project instructions for your AI collaborator**.
 ## Error Resolution
 [Fix order, debugging strategy]
 ```
-The [CLAUDE.md](https://github.com/AlbanOtt/chemometrics_vibe_coding_public/blob/main/CLAUDE.md) I wrote for this workshop.
-
+The [CLAUDE.md](https://github.com/AlbanOtt/chemometrics_vibe_coding_public/blob/main/CLAUDE.md) I wrote for this workshop. 
 Rule of thumb: Are these information ALWAYS needed regardless the context? if not, consider skills or agents.
 The more you write in CLAUDE.md, the more credits are used.
 
@@ -670,6 +669,7 @@ Analyze LC-MS metabolomics data to detect diphenhydramine and its metabolites in
 ---
 
 These instructions, I provided them in the initial [prompt](https://github.com/AlbanOtt/chemometrics_vibe_coding_public/blob/main/data/CD-MRG-metabolomics_summerschool_2023/prompt.md) because I wanted to have a user experience like:
+
 - drop your files in "./data"
 - write a prompt specific to your use-case and run it
 - How can we actually reach this?
@@ -786,8 +786,8 @@ Think of skills as:
 - How to perform a **task** not a workflow, that would be agents.
 :::
 ::: {.column width="50%"}
-![](../assets/bad_knowledge_management.png){width=60%}
-![](../assets/good_knowledge_management.png){width=60%}
+![](../assets/bad_knowledge_management.png){width=70%}
+![](../assets/good_knowledge_management.png){width=70%}
 :::
 :::
 :::
@@ -1199,3 +1199,4 @@ Treat skill installation like installing software: review it, understand it, tru
 
 [https://github.com/AlbanOtt/chemometrics_vibe_coding_public](https://github.com/AlbanOtt/chemometrics_vibe_coding_public)
 
+## -
